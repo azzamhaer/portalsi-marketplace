@@ -1,0 +1,285 @@
+<script lang="ts">
+  import { onMount } from 'svelte';
+  import Icon from '$lib/components/Icon.svelte';
+  import { fmtRp, calcDiscount } from '$lib/utils';
+  import { cart, auth, toast, wishlist } from '$lib/stores.svelte';
+  import { apiEndpoints } from '$lib/api';
+  import { goto } from '$app/navigation';
+  import ProductGrid from '$lib/components/ProductGrid.svelte';
+  import VendorBadge from '$lib/components/VendorBadge.svelte';
+
+  let { data } = $props();
+  const p = $derived(data.product);
+  const v = $derived(p.vendor);
+  const disc = $derived(calcDiscount(p.price, p.original_price));
+  let qty = $state(1);
+  const inWishlist = $derived(wishlist.has(p.id));
+
+  // Reviews state
+  let reviews = $state<any[]>(p?.reviews ?? []);
+  let canReview = $state(false);
+  let hasPurchased = $state(false);
+  let alreadyReviewed = $state(false);
+  let myRating = $state(5);
+  let myComment = $state('');
+  let submittingReview = $state(false);
+
+  onMount(async () => {
+    reviews = p?.reviews ?? [];
+    if (auth.user) {
+      try {
+        const r: any = await apiEndpoints.canReviewProduct(p.id);
+        canReview = r.can_review;
+        hasPurchased = r.has_purchased;
+        alreadyReviewed = r.already_reviewed;
+      } catch {}
+    }
+  });
+
+  async function submitReview() {
+    if (!myComment.trim()) { toast.error('Tulis ulasan dulu'); return; }
+    submittingReview = true;
+    try {
+      const r: any = await apiEndpoints.submitReview(p.id, myRating, myComment.trim());
+      reviews = [r, ...reviews];
+      canReview = false; alreadyReviewed = true;
+      myComment = ''; myRating = 5;
+      toast.success('Ulasan terkirim, terima kasih!');
+    } catch (e: any) { toast.error(e.message); } finally { submittingReview = false; }
+  }
+
+  const avgRating = $derived(
+    reviews.length
+      ? (reviews.reduce((s, r) => s + r.rating, 0) / reviews.length)
+      : (p?.rating ?? 5)
+  );
+
+  function addToCart() {
+    cart.add({ product_id: p.id, name: p.name, image: p.image, price: p.price,
+               stock: p.stock, vendor_id: v.id, vendor_name: v.name, vendor_username: v.username, qty });
+    toast.success('Ditambahkan ke keranjang');
+  }
+  function buyNow() {
+    addToCart();
+    if (!auth.user) { goto('/login?next=/checkout'); return; }
+    goto('/checkout');
+  }
+  async function toggleWish() {
+    if (!auth.user) { goto('/login'); return; }
+    wishlist.toggle(p.id);
+    try { await apiEndpoints.toggleWishlist(p.id); toast.success(inWishlist ? 'Dihapus dari wishlist' : 'Ditambahkan ke wishlist'); }
+    catch (e: any) { wishlist.toggle(p.id); toast.error(e.message); }
+  }
+  async function chatVendor() {
+    if (!auth.user) { goto('/login'); return; }
+    try {
+      const t: any = await apiEndpoints.startChat(v.id, p.id);
+      goto(`/chats/${t.id}`);
+    } catch (e: any) { toast.error(e.message); }
+  }
+</script>
+
+<svelte:head><title>{p.name}</title></svelte:head>
+
+<div class="container-x py-4 sm:py-6 md:py-10">
+  <nav class="flex items-center gap-1 text-xs text-ink-500 mb-4 overflow-hidden whitespace-nowrap">
+    <a href="/" class="hover:text-ink-900">Beranda</a>
+    <Icon name="chevron-right" size={12} />
+    <a href="/products" class="hover:text-ink-900">Produk</a>
+    <Icon name="chevron-right" size={12} />
+    <span class="text-ink-700 truncate">{p.name}</span>
+  </nav>
+
+  <div class="grid lg:grid-cols-2 gap-6 lg:gap-16 items-start">
+    <div class="space-y-3">
+      <div class="aspect-square rounded-2xl sm:rounded-3xl overflow-hidden bg-ink-50">
+        <img src={p.image} alt={p.name} class="w-full h-full object-cover" />
+      </div>
+      <div class="grid grid-cols-5 gap-2">
+        {#each Array(5) as _, i}
+          <div class="aspect-square rounded-xl overflow-hidden bg-ink-50 border-2" class:border-ink-950={i===0} class:border-transparent={i!==0}>
+            <img src={p.image} alt="" class="w-full h-full object-cover" />
+          </div>
+        {/each}
+      </div>
+    </div>
+
+    <div class="lg:sticky lg:top-24 space-y-5">
+      <div>
+        <div class="text-xs uppercase tracking-widest text-ink-500 mb-2">{v.name}</div>
+        <h1 class="font-display text-2xl sm:text-3xl md:text-4xl font-bold tracking-tightest leading-tight text-balance">{p.name}</h1>
+        <div class="flex items-center gap-3 sm:gap-4 mt-3 text-xs sm:text-sm text-ink-600 flex-wrap">
+          <span class="flex items-center gap-1"><Icon name="star" size={14} class="text-amber-400" fill="currentColor" /> <b class="text-ink-900">{avgRating.toFixed(1)}</b> ({reviews.length} ulasan)</span>
+          <span>·</span>
+          <span><b class="text-ink-900">{p.sold.toLocaleString('id-ID')}</b> terjual</span>
+        </div>
+        {#if p.tags?.length}
+          <div class="flex flex-wrap gap-1.5 mt-3">
+            {#each p.tags as t}
+              <a href={`/products?tag=${t}`} class="text-xs px-2.5 py-1 rounded-full bg-ink-100 hover:bg-app-primary hover:text-app-pfg transition">#{t}</a>
+            {/each}
+          </div>
+        {/if}
+      </div>
+
+      <div class="border-t border-b border-ink-100 py-5">
+        <div class="flex items-baseline gap-3 flex-wrap">
+          <span class="font-display text-3xl sm:text-4xl font-bold tracking-tightest text-ink-950">{fmtRp(p.price)}</span>
+          {#if p.original_price && p.original_price > p.price}
+            <span class="text-sm sm:text-base text-ink-400 line-through">{fmtRp(p.original_price)}</span>
+            <span class="pill-ink !bg-app-primary !text-app-pfg">Hemat {disc}%</span>
+          {/if}
+        </div>
+      </div>
+
+      <a href={v.username ? `/${v.username}` : `/vendors/${v.id}`} class="flex items-center gap-3 p-3 sm:p-4 rounded-2xl bg-ink-50 hover:bg-ink-100 transition-colors">
+        <img src={v.avatar} alt="" class="w-10 h-10 sm:w-12 sm:h-12 rounded-full object-cover" />
+        <div class="flex-1 min-w-0">
+          <div class="font-semibold text-sm truncate flex items-center gap-1.5">
+            {v.name}
+            {#if v.badge}<VendorBadge badge={v.badge} size={14} />{/if}
+            {#if v.is_official}<span class="pill-ink text-[10px]">Resmi</span>{/if}
+          </div>
+          <div class="text-xs text-ink-500">{v.city} · {v.rating} <Icon name="star" size={10} class="inline text-amber-400" fill="currentColor" /></div>
+        </div>
+        <Icon name="store" size={18} class="text-ink-700 hidden sm:block" />
+      </a>
+
+      <div class="flex items-center gap-3 sm:gap-4">
+        <span class="text-sm text-ink-700 w-16 sm:w-20">Jumlah</span>
+        <div class="inline-flex items-center border border-ink-200 rounded-full">
+          <button on:click={() => qty = Math.max(1, qty-1)} class="w-9 h-9 grid place-items-center hover:bg-ink-50 rounded-l-full"><Icon name="minus" size={14} /></button>
+          <input type="number" bind:value={qty} min="1" max={p.stock} class="w-12 text-center bg-transparent text-sm outline-none" />
+          <button on:click={() => qty = Math.min(p.stock, qty+1)} class="w-9 h-9 grid place-items-center hover:bg-ink-50 rounded-r-full"><Icon name="plus" size={14} /></button>
+        </div>
+        <span class="text-xs text-ink-500">Stok <b class="text-ink-700">{p.stock}</b></span>
+      </div>
+
+      <div class="flex gap-2 sm:gap-3">
+        <button on:click={addToCart} class="btn-outline btn-md sm:btn-lg flex-1">
+          <Icon name="shopping-bag" size={16} /> <span class="hidden xs:inline">Keranjang</span>
+        </button>
+        <button on:click={buyNow} class="btn-primary btn-md sm:btn-lg flex-1">
+          <Icon name="zap" size={16} /> Beli Sekarang
+        </button>
+        <button on:click={toggleWish}
+                class="btn-md sm:btn-lg !px-3 sm:!px-4 rounded-full transition
+                       {inWishlist ? 'bg-red-500 text-white hover:bg-red-600' : 'btn-outline'}"
+                aria-label="Wishlist">
+          <Icon name="heart" size={16} fill={inWishlist ? 'currentColor' : 'none'} />
+        </button>
+      </div>
+
+      <button on:click={chatVendor} class="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-full border border-ink-200 hover:bg-ink-50 text-sm font-medium transition">
+        <Icon name="message-circle" size={16} /> Tanyakan barang ini ke penjual
+      </button>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div class="flex items-start gap-2 p-3 rounded-xl bg-ink-50">
+          <Icon name="truck" size={16} class="text-ink-700 shrink-0 mt-0.5" />
+          <div>
+            <div class="text-xs font-semibold">Cepat</div>
+            <div class="text-[11px] text-ink-500">{v.city} · 2-4 hari</div>
+          </div>
+        </div>
+        <div class="flex items-start gap-2 p-3 rounded-xl bg-ink-50">
+          <Icon name="shield-check" size={16} class="text-emerald-600 shrink-0 mt-0.5" />
+          <div>
+            <div class="text-xs font-semibold">100% Original</div>
+            <div class="text-[11px] text-ink-500">Garansi 7 hari</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <section class="mt-12 sm:mt-16 max-w-4xl">
+    <div class="section-eyebrow mb-2">Deskripsi</div>
+    <h2 class="text-xl sm:text-2xl font-bold tracking-tightest mb-5">Tentang produk ini</h2>
+    <p class="text-base text-ink-700 leading-relaxed whitespace-pre-line">{p.description}</p>
+  </section>
+
+  <!-- Reviews -->
+  <section class="mt-12 sm:mt-16">
+    <div class="section-eyebrow mb-2">Ulasan</div>
+    <div class="flex items-end justify-between flex-wrap gap-4 mb-6">
+      <h2 class="text-xl sm:text-2xl font-bold tracking-tightest">Ulasan pembeli ({reviews.length})</h2>
+      <div class="flex items-center gap-2 text-sm">
+        <Icon name="star" size={16} class="text-amber-400" fill="currentColor" />
+        <span class="font-bold text-lg">{avgRating.toFixed(1)}</span>
+        <span class="text-ink-500">dari 5</span>
+      </div>
+    </div>
+
+    {#if auth.user}
+      {#if canReview}
+        <div class="card mb-6 bg-ink-50">
+          <h3 class="font-semibold mb-3">Beri ulasan Anda</h3>
+          <div class="flex gap-1 mb-3">
+            {#each [1,2,3,4,5] as n}
+              <button type="button" on:click={() => myRating = n} aria-label={`${n} bintang`}>
+                <Icon name="star" size={28} class={n <= myRating ? 'text-amber-400' : 'text-ink-300'} fill="currentColor" />
+              </button>
+            {/each}
+            <span class="ml-2 text-sm text-ink-600 self-center">({myRating}/5)</span>
+          </div>
+          <textarea bind:value={myComment} class="input" rows={3} placeholder="Bagaimana pengalaman Anda dengan produk ini?"></textarea>
+          <button on:click={submitReview} disabled={submittingReview || !myComment.trim()} class="btn-primary btn-md mt-3">
+            {submittingReview ? 'Mengirim…' : 'Kirim ulasan'}
+          </button>
+        </div>
+      {:else if alreadyReviewed}
+        <div class="bg-emerald-50 text-emerald-800 text-sm p-3 rounded-xl mb-6 flex items-center gap-2">
+          <Icon name="check-circle" size={16} /> Anda sudah memberi ulasan untuk produk ini. Terima kasih!
+        </div>
+      {:else if !hasPurchased}
+        <div class="bg-amber-50 text-amber-800 text-sm p-3 rounded-xl mb-6 flex items-center gap-2">
+          <Icon name="info" size={16} /> Hanya pembeli yang sudah menyelesaikan pesanan produk ini yang dapat memberikan ulasan.
+        </div>
+      {/if}
+    {:else}
+      <div class="bg-ink-50 text-ink-700 text-sm p-3 rounded-xl mb-6 flex items-center gap-2">
+        <Icon name="info" size={16} /> <a href="/login" class="font-semibold underline">Login</a> dulu untuk memberi ulasan (setelah Anda menyelesaikan pembelian).
+      </div>
+    {/if}
+
+    {#if reviews.length === 0}
+      <div class="text-center py-10 text-ink-500 card">
+        <Icon name="message-square" size={36} class="mx-auto mb-2 text-ink-300" />
+        Belum ada ulasan. Jadilah yang pertama!
+      </div>
+    {:else}
+      <div class="space-y-3">
+        {#each reviews as r (r.id)}
+          <div class="card">
+            <div class="flex items-start gap-3">
+              <div class="w-10 h-10 rounded-full bg-app-primary text-app-pfg grid place-items-center font-semibold shrink-0">
+                {(r.user?.name ?? 'U')[0].toUpperCase()}
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center justify-between gap-2 flex-wrap">
+                  <div class="font-semibold text-sm">{r.user?.name ?? 'Anonim'}</div>
+                  <div class="text-xs text-ink-500">{new Date(r.created_at).toLocaleDateString('id-ID', { year:'numeric', month:'short', day:'numeric' })}</div>
+                </div>
+                <div class="flex gap-0.5 my-1">
+                  {#each [1,2,3,4,5] as n}
+                    <Icon name="star" size={14} class={n <= r.rating ? 'text-amber-400' : 'text-ink-200'} fill="currentColor" />
+                  {/each}
+                </div>
+                <p class="text-sm text-ink-700 leading-relaxed whitespace-pre-line">{r.comment}</p>
+              </div>
+            </div>
+          </div>
+        {/each}
+      </div>
+    {/if}
+  </section>
+
+  {#if data.related?.length}
+    <section class="mt-16 sm:mt-20">
+      <div class="section-eyebrow mb-2">Lainnya</div>
+      <h2 class="section-title mb-6 sm:mb-8">Produk serupa</h2>
+      <ProductGrid products={data.related} />
+    </section>
+  {/if}
+</div>

@@ -1,0 +1,177 @@
+import { browser } from '$app/environment';
+
+/* ===== Auth store ===== */
+function createAuthStore() {
+  let user = $state<any>(null);
+  let loading = $state(true);
+
+  if (browser) {
+    const cached = localStorage.getItem('pm_user');
+    if (cached) try { user = JSON.parse(cached); } catch {}
+    loading = false;
+  }
+
+  return {
+    get user() { return user; },
+    get loading() { return loading; },
+    set(u: any) {
+      user = u;
+      if (browser) {
+        if (u) localStorage.setItem('pm_user', JSON.stringify(u));
+        else   localStorage.removeItem('pm_user');
+      }
+    },
+    clear() {
+      user = null;
+      if (browser) {
+        localStorage.removeItem('pm_user');
+        localStorage.removeItem('pm_token');
+      }
+    }
+  };
+}
+export const auth = createAuthStore();
+
+/* ===== Cart store ===== */
+export interface CartItem {
+  product_id: number;
+  name: string;
+  image: string;
+  price: number;
+  vendor_id: number;
+  vendor_name: string;
+  vendor_username?: string | null;
+  qty: number;
+  stock: number;
+  checked: boolean;
+}
+
+function createCartStore() {
+  let items = $state<CartItem[]>([]);
+  if (browser) {
+    const cached = localStorage.getItem('pm_cart');
+    if (cached) try { items = JSON.parse(cached); } catch {}
+  }
+  function save() { if (browser) localStorage.setItem('pm_cart', JSON.stringify(items)); }
+
+  return {
+    get items() { return items; },
+    get count() { return items.reduce((s, i) => s + i.qty, 0); },
+    get checkedItems() { return items.filter(i => i.checked); },
+    get subtotal() { return items.filter(i => i.checked).reduce((s,i) => s + i.price * i.qty, 0); },
+    add(it: Omit<CartItem, 'qty'|'checked'> & { qty?: number }) {
+      const existing = items.find(i => i.product_id === it.product_id);
+      if (existing) existing.qty = Math.min(it.stock, existing.qty + (it.qty ?? 1));
+      else items = [...items, { ...it, qty: it.qty ?? 1, checked: true }];
+      save();
+    },
+    update(id: number, qty: number) { items = items.map(i => i.product_id === id ? { ...i, qty: Math.max(1, Math.min(i.stock, qty)) } : i); save(); },
+    remove(id: number) { items = items.filter(i => i.product_id !== id); save(); },
+    toggleCheck(id: number) { items = items.map(i => i.product_id === id ? { ...i, checked: !i.checked } : i); save(); },
+    checkAll(state: boolean) { items = items.map(i => ({ ...i, checked: state })); save(); },
+    clear() { items = []; save(); },
+    clearChecked() { items = items.filter(i => !i.checked); save(); }
+  };
+}
+export const cart = createCartStore();
+
+/* ===== Wishlist store (local cache + server sync) ===== */
+function createWishlistStore() {
+  let ids = $state<number[]>([]);
+  if (browser) {
+    const cached = localStorage.getItem('pm_wishlist');
+    if (cached) try { ids = JSON.parse(cached); } catch {}
+  }
+  function save() { if (browser) localStorage.setItem('pm_wishlist', JSON.stringify(ids)); }
+  return {
+    get ids() { return ids; },
+    has(id: number) { return ids.includes(id); },
+    toggle(id: number) {
+      if (ids.includes(id)) ids = ids.filter(x => x !== id);
+      else ids = [...ids, id];
+      save();
+    },
+    setAll(newIds: number[]) { ids = newIds; save(); },
+    clear() { ids = []; save(); }
+  };
+}
+export const wishlist = createWishlistStore();
+
+/* ===== Settings store (loaded from backend) ===== */
+function createSettingsStore() {
+  const defaults = {
+    appName: 'MPSI',
+    logo: '' as string,
+    palette: 'mono' as string,
+    primary: '#0a0a0a',
+    primaryFg: '#ffffff',
+    accent: '#6366f1',
+    tagline: 'Marketplace untuk semua',
+    heroTitle: 'Belanja yang membuat hidup lebih mudah.',
+    heroSubtitle: 'Ribuan produk pilihan dari toko terverifikasi. Pembayaran aman, pengiriman cepat.',
+    heroCtaLabel: 'Mulai belanja',
+    heroCtaHref: '/products',
+    heroImage: '',
+    paymentIntro: '',
+    helpIntro: '',
+  };
+  let s = $state<any>({ ...defaults });
+  if (browser) {
+    const cached = localStorage.getItem('pm_settings');
+    if (cached) try { s = { ...defaults, ...JSON.parse(cached) }; } catch {}
+  }
+  return {
+    get appName()      { return s.appName; },
+    get logo()         { return s.logo; },
+    get palette()      { return s.palette; },
+    get primary()      { return s.primary; },
+    get primaryFg()    { return s.primaryFg; },
+    get accent()       { return s.accent; },
+    get tagline()      { return s.tagline; },
+    get heroTitle()    { return s.heroTitle; },
+    get heroSubtitle() { return s.heroSubtitle; },
+    get heroCtaLabel() { return s.heroCtaLabel; },
+    get heroCtaHref()  { return s.heroCtaHref; },
+    get heroImage()    { return s.heroImage; },
+    get paymentIntro() { return s.paymentIntro; },
+    get helpIntro()    { return s.helpIntro; },
+    setAll(data: any) {
+      s = { ...defaults, ...data };
+      if (browser) {
+        localStorage.setItem('pm_settings', JSON.stringify(s));
+        applyPalette(s);
+      }
+    }
+  };
+}
+export const settings = createSettingsStore();
+
+export function applyPalette(s: any) {
+  if (!browser) return;
+  const root = document.documentElement;
+  root.style.setProperty('--app-primary',    s.primary    || '#0a0a0a');
+  root.style.setProperty('--app-primary-fg', s.primaryFg  || '#ffffff');
+  root.style.setProperty('--app-accent',     s.accent     || '#6366f1');
+  if (document.title === 'undefined' || !document.title) document.title = s.appName || 'MPSI';
+}
+
+/* ===== Toast store ===== */
+export interface Toast { id: number; msg: string; type: 'info'|'success'|'error'|'warn' }
+function createToastStore() {
+  let items = $state<Toast[]>([]);
+  return {
+    get items() { return items; },
+    push(t: Omit<Toast, 'id'>) {
+      const id = Date.now() + Math.random();
+      items = [...items, { ...t, id }];
+      setTimeout(() => { items = items.filter(x => x.id !== id); }, 3000);
+    }
+  };
+}
+export const toasts = createToastStore();
+export const toast = {
+  success: (msg: string) => toasts.push({ msg, type:'success' }),
+  error:   (msg: string) => toasts.push({ msg, type:'error' }),
+  warn:    (msg: string) => toasts.push({ msg, type:'warn' }),
+  info:    (msg: string) => toasts.push({ msg, type:'info' })
+};
