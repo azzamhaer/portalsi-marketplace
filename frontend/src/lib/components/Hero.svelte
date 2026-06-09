@@ -8,10 +8,12 @@
 
   <div class="relative px-5 py-12 sm:px-10 sm:py-16 md:px-14 md:py-20 lg:py-24 grid lg:grid-cols-2 gap-10 items-center">
     <div class="max-w-xl">
-      <div class="inline-flex items-center gap-2 text-xs font-medium px-3 py-1 rounded-full bg-app-primary text-app-pfg mb-5">
-        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-        {settings.tagline}
-      </div>
+      {#if settings.tagline?.trim()}
+        <div class="inline-flex items-center gap-2 text-xs font-medium px-3 py-1 rounded-full bg-app-primary text-app-pfg mb-5">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+          {settings.tagline}
+        </div>
+      {/if}
       <h1 class="font-display text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold tracking-tightest text-ink-950 leading-[1.05] text-balance mb-5">
         {settings.heroTitle}
       </h1>

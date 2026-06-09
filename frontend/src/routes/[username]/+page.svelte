@@ -41,7 +41,7 @@
       <p class="text-sm text-ink-600 mt-3 max-w-2xl">{v.description}</p>
     </div>
     <div class="flex items-center gap-6 text-sm">
-      <div><div class="font-display text-xl font-bold tracking-tightest flex items-center gap-1"><Icon name="star" size={16} class="text-amber-400" fill="currentColor" />{v.rating}</div><div class="text-xs text-ink-500">Rating</div></div>
+      <div><div class="font-display text-xl font-bold tracking-tightest flex items-center gap-1">{#if v.rating > 0}<Icon name="star" size={16} class="text-amber-400" fill="currentColor" />{Number(v.rating).toFixed(1)}{:else}<span class="text-ink-400 text-sm">Belum ada</span>{/if}</div><div class="text-xs text-ink-500">Rating</div></div>
       <div><div class="font-display text-xl font-bold tracking-tightest">{(v.total_sold ?? 0).toLocaleString('id-ID')}</div><div class="text-xs text-ink-500">Penjualan</div></div>
       <div><div class="font-display text-xl font-bold tracking-tightest">{(v.followers ?? 0).toLocaleString('id-ID')}</div><div class="text-xs text-ink-500">Pengikut</div></div>
     </div>

@@ -122,21 +122,31 @@ class SellerController extends Controller
             'original_price' => 'nullable|integer|min:0',
             'stock'          => 'required|integer|min:0',
             'image'          => 'nullable|string',
+            'images'         => 'nullable|array|max:8',
+            'images.*'       => 'string',
+            'variants'       => 'nullable|array',
+            'variants.*'     => 'array',
+            'variants.*.*'   => 'string|max:50',
             'is_active'      => 'sometimes|boolean',
             'tags'           => 'required|array|min:1',
             'tags.*'         => 'string|max:50',
         ]);
 
+        $images = $data['images'] ?? [];
+        $coverImage = $data['image'] ?: ($images[0] ?? $this->makeProductImage($data['name'], '#0a0a0a'));
+
         $product = Product::create([
             'vendor_id'  => $vendor->id,
-            'category_id'=> 'elektronik', // default fallback - catalogues now use tags
+            'category_id'=> 'elektronik',
             'name'       => $data['name'],
-            'slug'       => Str::slug($data['name']) . '-' . Str::random(4),
+            'slug'       => $this->makeProductSlug($data['name']),
             'description'=> $data['description'],
             'price'      => $data['price'],
             'original_price' => $data['original_price'] ?? null,
             'stock'      => $data['stock'],
-            'image'      => $data['image'] ?: $this->makeProductImage($data['name'], '#0a0a0a'),
+            'image'      => $coverImage,
+            'images'     => $images,
+            'variants'   => $data['variants'] ?? null,
             'is_active'  => $data['is_active'] ?? true,
         ]);
 
@@ -155,6 +165,11 @@ class SellerController extends Controller
             'original_price' => 'nullable|integer|min:0',
             'stock'          => 'sometimes|integer|min:0',
             'image'          => 'nullable|string',
+            'images'         => 'nullable|array|max:8',
+            'images.*'       => 'string',
+            'variants'       => 'nullable|array',
+            'variants.*'     => 'array',
+            'variants.*.*'   => 'string|max:50',
             'is_active'      => 'sometimes|boolean',
             'tags'           => 'sometimes|array',
             'tags.*'         => 'string|max:50',
@@ -192,9 +207,21 @@ class SellerController extends Controller
     public function shipOrder(Request $request, $id)
     {
         $vendor = $request->user()->vendor;
-        $order = Order::whereHas('items', fn($q) => $q->where('vendor_id', $vendor?->id))->findOrFail($id);
-        $tracking = 'JNE' . random_int(1_000_000_000, 9_999_999_999);
+        $order = Order::whereHas('items', fn($q) => $q->where('vendor_id', $vendor?->id))->with('user')->findOrFail($id);
+        $tracking = $this->makeTrackingNumber($order->courier_name ?? 'JNE');
         $order->update(['status' => 'SHIPPED', 'shipped_at' => now(), 'tracking_no' => $tracking]);
+
+        // Email notif ke pembeli
+        if ($order->user) {
+            $brevo = new \App\Services\BrevoService();
+            $front = rtrim(config('services.frontend_url', 'http://localhost:5173'), '/');
+            $body = "<p>Hai <b>" . htmlspecialchars($order->user->name) . "</b>,</p>
+                     <p>Pesanan <b>{$order->order_number}</b> sudah dikirim dengan nomor resi <b>{$tracking}</b>.</p>";
+            $brevo->send($order->user->email, $order->user->name, "Pesanan Dikirim #{$order->order_number}",
+                $brevo->layout('Pesanan Dikirim', $body, $front . '/orders/' . $order->id, 'Cek Detail Pesanan')
+            );
+        }
+
         return response()->json(['ok' => true, 'tracking_no' => $tracking]);
     }
 
@@ -237,6 +264,37 @@ class SellerController extends Controller
         ]);
 
         return response()->json(['ok' => true, 'username' => $newUsername]);
+    }
+
+    private function makeTrackingNumber(string $courierName): string
+    {
+        // Map courier → prefix kode
+        $name = strtoupper($courierName);
+        $prefix = match (true) {
+            str_contains($name, 'JNE')      => 'JNE',
+            str_contains($name, 'J&T') || str_contains($name, 'JNT') => 'JNT',
+            str_contains($name, 'SICEPAT')  => 'SCP',
+            str_contains($name, 'ANTERAJA') => 'ATJ',
+            str_contains($name, 'POS')      => 'POS',
+            str_contains($name, 'GOSEND') || str_contains($name, 'GO-JEK') => 'GSD',
+            str_contains($name, 'GRAB')     => 'GRB',
+            str_contains($name, 'NINJA')    => 'NJV',
+            str_contains($name, 'TIKI')     => 'TKI',
+            str_contains($name, 'WAHANA')   => 'WHN',
+            default                         => 'EXP',
+        };
+        $number = str_pad((string) random_int(0, 9_999_999_999), 10, '0', STR_PAD_LEFT);
+        return $prefix . $number;
+    }
+
+    private function makeProductSlug(string $name): string
+    {
+        $base = Str::slug($name) ?: 'produk';
+        if (strlen($base) > 50) $base = substr($base, 0, 50);
+        do {
+            $candidate = $base . '-' . str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        } while (Product::where('slug', $candidate)->exists());
+        return $candidate;
     }
 
     private function generateUsername(string $name): string

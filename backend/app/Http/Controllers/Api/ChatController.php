@@ -27,7 +27,7 @@ class ChatController extends Controller
 
     public function show(Request $request, $id)
     {
-        $thread = ChatThread::with(['vendor:id,name,avatar,user_id', 'user:id,name', 'product:id,name,image,price', 'messages.sender:id,name'])
+        $thread = ChatThread::with(['vendor:id,name,avatar,user_id,username,badge', 'user:id,name,email,phone', 'product:id,name,image,price,slug', 'messages.sender:id,name'])
             ->findOrFail($id);
         $this->authorizeThread($request, $thread);
         // mark messages addressed to current user as read
@@ -61,19 +61,26 @@ class ChatController extends Controller
 
     public function sendMessage(Request $request, $threadId)
     {
-        $data = $request->validate(['message' => 'required|string|max:2000']);
+        $data = $request->validate([
+            'message'   => 'nullable|string|max:2000',
+            'image_url' => 'nullable|string', // data URI
+        ]);
+        if (empty($data['message']) && empty($data['image_url'])) {
+            return response()->json(['message' => 'Pesan atau gambar harus diisi'], 422);
+        }
         $thread = ChatThread::findOrFail($threadId);
         $this->authorizeThread($request, $thread);
 
         $isBuyer = $thread->user_id === $request->user()->id;
         $msg = ChatMessage::create([
-            'thread_id' => $thread->id,
+            'thread_id'      => $thread->id,
             'sender_user_id' => $request->user()->id,
-            'sender_type' => $isBuyer ? 'BUYER' : 'SELLER',
-            'message' => $data['message'],
+            'sender_type'    => $isBuyer ? 'BUYER' : 'SELLER',
+            'message'        => $data['message'] ?? '',
+            'image_url'      => $data['image_url'] ?? null,
         ]);
         $thread->update(['last_message_at' => now()]);
-        return response()->json($msg);
+        return response()->json($msg->load('sender:id,name'));
     }
 
     private function authorizeThread(Request $request, ChatThread $thread): void

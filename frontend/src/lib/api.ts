@@ -56,10 +56,12 @@ export const apiEndpoints = {
   product:     (id: string|number, f?: typeof fetch) => api(`/products/${id}`, { fetcher: f }),
   categories:  (f?: typeof fetch) => api('/categories', { fetcher: f }),
   tags:        (f?: typeof fetch) => api('/tags', { fetcher: f }),
+  searchSuggest: (q: string, f?: typeof fetch) => api('/search/suggest?q=' + encodeURIComponent(q), { fetcher: f }),
   vendors:     (q: string = '', f?: typeof fetch) => api('/vendors' + (q ? '?' + q : ''), { fetcher: f }),
   vendor:      (idOrUsername: string|number, f?: typeof fetch) => api(`/vendors/${idOrUsername}`, { fetcher: f }),
   paymentMethods: (f?: typeof fetch) => api('/payment-methods', { fetcher: f }),
   shippingOptions:(f?: typeof fetch) => api('/shipping-options', { fetcher: f }),
+  faqs:           (f?: typeof fetch) => api('/faqs', { fetcher: f }),
 
   /* auth */
   login:    (email: string, password: string) => api('/auth/login',    { method: 'POST', body: { email, password } as any }),
@@ -67,6 +69,16 @@ export const apiEndpoints = {
   logout:   ()       => api('/auth/logout',  { method: 'POST' }),
   me:       ()       => api('/auth/me'),
   updateProfile: (b: any) => api('/auth/profile', { method: 'PUT', body: b }),
+  changePassword: (current_password: string, new_password: string) =>
+    api('/auth/change-password', { method: 'POST', body: { current_password, new_password } as any }),
+  requestChangeEmail: (new_email: string) =>
+    api('/auth/request-change-email', { method: 'POST', body: { new_email } as any }),
+  forgotPassword: (email: string) => api('/auth/forgot-password', { method: 'POST', body: { email } as any }),
+  resetPassword: (token: string, new_password: string) =>
+    api('/auth/reset-password', { method: 'POST', body: { token, new_password } as any }),
+  verifyEmail: (token: string) => api('/auth/verify-email', { method: 'POST', body: { token } as any }),
+  resendVerification: () => api('/auth/resend-verification', { method: 'POST' }),
+  confirmEmail: (token: string) => api('/auth/confirm-email', { method: 'POST', body: { token } as any }),
 
   /* address */
   addresses:       () => api('/addresses'),
@@ -109,7 +121,7 @@ export const apiEndpoints = {
   chats:       () => api('/chats'),
   chatThread:  (id: number) => api(`/chats/${id}`),
   startChat:   (vendor_id: number, product_id?: number) => api('/chats', { method: 'POST', body: { vendor_id, product_id } as any }),
-  sendMessage: (thread_id: number, message: string) => api(`/chats/${thread_id}/messages`, { method: 'POST', body: { message } as any }),
+  sendMessage: (thread_id: number, message: string, image_url?: string | null) => api(`/chats/${thread_id}/messages`, { method: 'POST', body: { message, image_url } as any }),
 
   /* withdraw seller */
   sellerWithdraw:        () => api('/seller/withdraw'),
@@ -123,6 +135,7 @@ export const apiEndpoints = {
   /* admin */
   adminStats:        () => api('/admin/stats'),
   adminUsers:        (q='') => api('/admin/users' + (q ? '?'+q : '')),
+  adminUser:         (id: number) => api(`/admin/users/${id}`),
   adminDeleteUser:   (id: number) => api(`/admin/users/${id}`, { method: 'DELETE' }),
   adminUpdateUser:   (id: number, b: any) => api(`/admin/users/${id}`, { method: 'PUT', body: b }),
   adminVendors:      (q='') => api('/admin/vendors' + (q ? '?'+q : '')),
@@ -131,6 +144,10 @@ export const apiEndpoints = {
   adminDeleteVendor: (id: number) => api(`/admin/vendors/${id}`, { method: 'DELETE' }),
   adminWithdrawals:  (q='') => api('/admin/withdrawals' + (q ? '?'+q : '')),
   adminProcessWithdraw: (id: number, status: string, admin_note?: string) => api(`/admin/withdrawals/${id}`, { method: 'POST', body: { status, admin_note } as any }),
+  adminFaqs:           () => api('/admin/faqs'),
+  adminSaveFaqs:       (items: any[]) => api('/admin/faqs', { method: 'PUT', body: { items } as any }),
+  adminPaymentMethods: () => api('/admin/payment-methods'),
+  adminSavePaymentMethods: (items: any[]) => api('/admin/payment-methods', { method: 'PUT', body: { items } as any }),
   adminOrders:       (q='') => api('/admin/orders' + (q ? '?'+q : '')),
   adminUpdateOrder:  (id: number, b: any) => api(`/admin/orders/${id}`, { method: 'PUT', body: b }),
   adminReturns:      () => api('/admin/returns'),

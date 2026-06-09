@@ -33,6 +33,10 @@ class ReservedUsernames
         'shipping', 'tracking',
         'favicon.ico', 'robots.txt', 'sitemap.xml',
         'null', 'undefined', 'true', 'false',
+        // Auth flows
+        'forgot-password', 'reset-password', 'verify-email', 'confirm-email',
+        // Admin extra
+        'appearance',
     ];
 
     public static function isReserved(string $username): bool

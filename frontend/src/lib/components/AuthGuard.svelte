@@ -3,13 +3,16 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import { auth } from '$lib/stores.svelte';
+  import AdminBlock from './AdminBlock.svelte';
 
-  let { role = null as null | 'BUYER'|'SELLER'|'ADMIN', children } = $props<{
+  let { role = null as null | 'BUYER'|'SELLER'|'ADMIN', blockAdmin = false, children } = $props<{
     role?: null | 'BUYER'|'SELLER'|'ADMIN';
+    blockAdmin?: boolean;
     children: any;
   }>();
 
   const ok = $derived(!!auth.user && (!role || auth.user.role === role || auth.user.role === 'ADMIN'));
+  const isAdminBlocked = $derived(blockAdmin && auth.user?.role === 'ADMIN');
   let mounted = $state(false);
 
   onMount(() => {
@@ -24,7 +27,9 @@
   });
 </script>
 
-{#if ok}
+{#if isAdminBlocked}
+  <AdminBlock />
+{:else if ok}
   {@render children()}
 {:else}
   <div class="container-x py-16">

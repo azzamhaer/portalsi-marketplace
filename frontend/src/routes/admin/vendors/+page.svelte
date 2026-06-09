@@ -4,11 +4,15 @@
   import { toast } from '$lib/stores.svelte';
   import Icon from '$lib/components/Icon.svelte';
   import VendorBadge from '$lib/components/VendorBadge.svelte';
-  import { page } from '$app/stores';
+  import { page as pageStore } from '$app/stores';
 
   let vendors = $state<any[]>([]);
+  let meta = $state<any>({ current_page: 1, last_page: 1, total: 0 });
   let loading = $state(true);
-  let status = $state($page.url.searchParams.get('status') ?? '');
+  let status = $state($pageStore.url.searchParams.get('status') ?? '');
+  let search = $state('');
+  let page = $state(1);
+  let searchTimer: any;
   let active = $state<any>(null);
 
   async function load() {
@@ -16,11 +20,20 @@
     try {
       const params = new URLSearchParams();
       if (status) params.set('status', status);
+      if (search.trim()) params.set('search', search.trim());
+      params.set('page', String(page));
       const r: any = await apiEndpoints.adminVendors(params.toString());
       vendors = r.data ?? [];
+      meta = { current_page: r.current_page, last_page: r.last_page, total: r.total };
     } finally { loading = false; }
   }
   onMount(load);
+
+  function onSearchInput() {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => { page = 1; load(); }, 300);
+  }
+  function setPage(p: number) { page = p; load(); }
 
   async function verify(v: any, st: 'APPROVED'|'REJECTED') {
     const note = st === 'REJECTED' ? prompt('Alasan penolakan:') : '';
@@ -44,8 +57,15 @@
 </script>
 
 <div class="card flex items-center gap-3 mb-4 flex-wrap">
-  <h3 class="font-semibold">Vendor, Verifikasi & Badge</h3>
-  <select bind:value={status} on:change={load} class="input-sm input w-48 ml-auto">
+  <h3 class="font-semibold shrink-0">Vendor, Verifikasi & Badge</h3>
+  <div class="flex items-center gap-2 flex-1 min-w-[200px] bg-ink-50 rounded-full px-3">
+    <Icon name="search" size={14} class="text-ink-400" />
+    <input bind:value={search} on:input={onSearchInput} class="flex-1 bg-transparent text-sm py-2 outline-none" placeholder="Cari nama toko, username, kota, email/HP pemilik" />
+    {#if search}
+      <button on:click={() => { search = ''; page = 1; load(); }} class="text-ink-400 hover:text-ink-700"><Icon name="x" size={14} /></button>
+    {/if}
+  </div>
+  <select bind:value={status} on:change={() => { page = 1; load(); }} class="input-sm input w-40">
     <option value="">Semua status</option>
     <option value="PENDING">Pending</option>
     <option value="APPROVED">Approved</option>
@@ -55,6 +75,7 @@
 
 {#if loading}<div class="card text-center text-ink-500 py-10">Memuat…</div>
 {:else}
+  <p class="text-xs text-ink-500 mb-3">{meta.total} vendor · halaman {meta.current_page} dari {meta.last_page}</p>
   <div class="grid sm:grid-cols-2 gap-4">
     {#each vendors as v (v.id)}
       <div class="card">
@@ -65,14 +86,14 @@
               {v.name}
               {#if v.badge}<VendorBadge badge={v.badge} size={14} />{/if}
             </div>
-            <div class="text-xs text-ink-500 truncate">{v.user?.email}</div>
+            <div class="text-xs text-ink-500 truncate">@{v.username} · {v.user?.email}</div>
           </div>
           <span class="pill-{v.verification_status === 'APPROVED' ? 'green' : v.verification_status === 'PENDING' ? 'amber' : 'red'}">{v.verification_status}</span>
         </div>
         <div class="text-xs text-ink-500 mb-2 flex items-center gap-1 flex-wrap">
           <Icon name="map-pin" size={11} /> {v.city}
           <span class="mx-1">·</span>
-          <Icon name="star" size={11} class="text-amber-400" fill="currentColor" /> {v.rating}
+          {#if v.rating > 0}<Icon name="star" size={11} class="text-amber-400" fill="currentColor" /> {v.rating}{:else}<span class="text-ink-400">No rating</span>{/if}
           <span class="mx-1">·</span>
           {v.total_sold} terjual
           <span class="mx-1">·</span>
@@ -98,6 +119,13 @@
       </div>
     {/each}
   </div>
+  {#if meta.last_page > 1}
+    <div class="mt-4 flex justify-center gap-1">
+      <button on:click={() => setPage(Math.max(1, page - 1))} disabled={page === 1} class="px-3 py-1.5 rounded-full text-sm bg-ink-100 hover:bg-ink-200 disabled:opacity-40">‹</button>
+      <span class="px-3 py-1.5 text-sm">{page} / {meta.last_page}</span>
+      <button on:click={() => setPage(Math.min(meta.last_page, page + 1))} disabled={page >= meta.last_page} class="px-3 py-1.5 rounded-full text-sm bg-ink-100 hover:bg-ink-200 disabled:opacity-40">›</button>
+    </div>
+  {/if}
 {/if}
 
 {#if active}

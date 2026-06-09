@@ -20,7 +20,7 @@
   }
 </script>
 
-<a href={`/product/${product.id}`} class="group block">
+<a href={`/product/${product.slug || product.id}`} class="group block">
   <div class="relative aspect-square overflow-hidden rounded-2xl bg-ink-50">
     <img src={product.image} alt={product.name} loading="lazy"
          class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
@@ -50,10 +50,15 @@
       {/if}
     </div>
     <div class="flex items-center justify-between text-xs text-ink-500">
-      <span class="flex items-center gap-1">
-        <Icon name="star" size={12} class="text-amber-400" fill="currentColor" />
-        {(product.rating ?? 5).toFixed(1)}
-      </span>
+      {#if (product.reviews_count ?? 0) > 0}
+        <span class="flex items-center gap-1">
+          <Icon name="star" size={12} class="text-amber-400" fill="currentColor" />
+          {Number(product.rating ?? 0).toFixed(1)}
+          <span class="text-ink-400">({product.reviews_count})</span>
+        </span>
+      {:else}
+        <span class="text-ink-400">Belum ada ulasan</span>
+      {/if}
       <span>{(product.sold ?? 0).toLocaleString('id-ID')} terjual</span>
     </div>
   </div>

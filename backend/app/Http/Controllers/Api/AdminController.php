@@ -29,26 +29,53 @@ class AdminController extends Controller
     /* ---------- Users ---------- */
     public function users(Request $request)
     {
-        $q = User::with('vendor:id,user_id,name,verification_status')->orderByDesc('id');
-        if ($s = $request->query('search')) {
+        $q = User::with('vendor:id,user_id,name,username,verification_status')->orderByDesc('id');
+        if ($s = trim((string) $request->query('search'))) {
             $q->where(function ($qq) use ($s) {
-                $qq->where('name', 'like', "%$s%")->orWhere('email', 'like', "%$s%");
+                $qq->where('name', 'like', "%$s%")
+                   ->orWhere('email', 'like', "%$s%")
+                   ->orWhere('phone', 'like', "%$s%")
+                   ->orWhereHas('vendor', fn($v) => $v->where('username', 'like', "%$s%")->orWhere('name', 'like', "%$s%"));
             });
         }
         if ($r = $request->query('role')) $q->where('role', $r);
-        return response()->json($q->paginate(20));
+        $per = min(50, max(5, (int) $request->query('per_page', 20)));
+        return response()->json($q->paginate($per));
     }
 
     public function updateUser(Request $request, $id)
     {
         $u = User::findOrFail($id);
+        // Role tidak bisa diubah dari API (security): hanya via DB manual / verify vendor flow
         $data = $request->validate([
             'name'  => 'sometimes|string|max:255',
             'phone' => 'nullable|string|max:20',
-            'role'  => 'sometimes|in:BUYER,SELLER,ADMIN',
         ]);
         $u->update($data);
         return response()->json($u);
+    }
+
+    public function userDetail($id)
+    {
+        $user = User::with('vendor')->findOrFail($id);
+        $orders = \App\Models\Order::where('user_id', $user->id)
+            ->with('payment:id,order_id,method_name,status', 'items:id,order_id,product_name,quantity,price,variant_selection')
+            ->orderByDesc('id')->take(50)->get();
+        $vendorProducts = collect();
+        $vendorOrders = collect();
+        if ($user->vendor) {
+            $vendorProducts = \App\Models\Product::where('vendor_id', $user->vendor->id)
+                ->with('tagModels:id,slug')->withCount('reviews')->orderByDesc('id')->take(50)->get();
+            $vendorOrders = \App\Models\OrderItem::where('vendor_id', $user->vendor->id)
+                ->with('order:id,order_number,status,created_at')
+                ->orderByDesc('id')->take(50)->get();
+        }
+        return response()->json([
+            'user'           => $user,
+            'orders'         => $orders,
+            'vendor_products'=> $vendorProducts,
+            'vendor_orders'  => $vendorOrders,
+        ]);
     }
 
     public function deleteUser($id)
@@ -62,11 +89,18 @@ class AdminController extends Controller
     /* ---------- Vendors ---------- */
     public function vendors(Request $request)
     {
-        $q = Vendor::with('user:id,name,email')->orderByDesc('id');
+        $q = Vendor::with('user:id,name,email,phone')->orderByDesc('id');
         if ($s = $request->query('status')) $q->where('verification_status', $s);
-        if ($k = $request->query('search')) $q->where('name', 'like', "%$k%");
-        $vendors = $q->paginate(20);
-        // include ktp_image manually for admin view
+        if ($k = trim((string) $request->query('search'))) {
+            $q->where(function ($qq) use ($k) {
+                $qq->where('name', 'like', "%$k%")
+                   ->orWhere('username', 'like', "%$k%")
+                   ->orWhere('city', 'like', "%$k%")
+                   ->orWhereHas('user', fn($u) => $u->where('name','like',"%$k%")->orWhere('email','like',"%$k%")->orWhere('phone','like',"%$k%"));
+            });
+        }
+        $per = min(50, max(5, (int) $request->query('per_page', 20)));
+        $vendors = $q->paginate($per);
         $vendors->getCollection()->each(function ($v) {
             $v->setHidden([]);
             $v->makeVisible('ktp_image');
@@ -107,7 +141,15 @@ class AdminController extends Controller
         $q = Order::with(['user:id,name,email', 'address:id,city,recipient', 'payment:id,order_id,method_name,status', 'items'])
                   ->orderByDesc('id');
         if ($s = $request->query('status')) $q->where('status', $s);
-        return response()->json($q->paginate(20));
+        if ($k = trim((string) $request->query('search'))) {
+            $q->where(function ($qq) use ($k) {
+                $qq->where('order_number', 'like', "%$k%")
+                   ->orWhere('tracking_no', 'like', "%$k%")
+                   ->orWhereHas('user', fn($u) => $u->where('name','like',"%$k%")->orWhere('email','like',"%$k%"));
+            });
+        }
+        $per = min(50, max(5, (int) $request->query('per_page', 20)));
+        return response()->json($q->paginate($per));
     }
 
     public function updateOrder(Request $request, $id)

@@ -110,7 +110,8 @@ class ProductSeeder extends Seeder
                 'original_price' => $orig,
                 'stock'          => $stock,
                 'sold'           => $sold,
-                'rating'         => $rating,
+                // Mulai dengan 0 — rating real dihitung dari ulasan pembeli
+                'rating'         => 0,
                 'weight'         => 500,
                 'image'          => Helpers::productImage($em, $bg1, $bg2, $lbl),
                 'is_active'      => true,

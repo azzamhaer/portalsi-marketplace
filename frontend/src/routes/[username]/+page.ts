@@ -24,6 +24,8 @@ const RESERVED = new Set<string>([
   'shipping', 'tracking',
   'favicon.ico', 'robots.txt', 'sitemap.xml',
   'null', 'undefined', 'true', 'false',
+  'forgot-password', 'reset-password', 'verify-email', 'confirm-email',
+  'appearance',
 ]);
 
 export const load: PageLoad = async ({ params, fetch }) => {

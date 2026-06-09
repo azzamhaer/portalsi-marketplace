@@ -15,6 +15,29 @@
   let qty = $state(1);
   const inWishlist = $derived(wishlist.has(p.id));
 
+  // Gallery state
+  const images = $derived.by(() => {
+    const arr = Array.isArray(p?.images) ? p.images.filter((x: any) => typeof x === 'string' && x) : [];
+    return arr.length ? arr : [p?.image].filter(Boolean);
+  });
+  let activeImgIdx = $state(0);
+  let zoomOpen = $state(false);
+
+  function nextImg() { activeImgIdx = (activeImgIdx + 1) % images.length; }
+  function prevImg() { activeImgIdx = (activeImgIdx - 1 + images.length) % images.length; }
+
+  // Variants state — p.variants: { Warna: [..], Ukuran: [..] }
+  const variantNames = $derived(p?.variants && typeof p.variants === 'object' ? Object.keys(p.variants) : []);
+  let pickedVariants = $state<Record<string, string>>({});
+
+  function variantText(): string | null {
+    if (!variantNames.length) return null;
+    return variantNames.map((k) => `${k}: ${pickedVariants[k] ?? '-'}`).join(', ');
+  }
+  function allVariantsPicked(): boolean {
+    return variantNames.every((k) => !!pickedVariants[k]);
+  }
+
   // Reviews state
   let reviews = $state<any[]>(p?.reviews ?? []);
   let canReview = $state(false);
@@ -55,11 +78,20 @@
   );
 
   function addToCart() {
-    cart.add({ product_id: p.id, name: p.name, image: p.image, price: p.price,
-               stock: p.stock, vendor_id: v.id, vendor_name: v.name, vendor_username: v.username, qty });
+    if (auth.user?.role === 'ADMIN') { toast.warn('Admin tidak bisa berbelanja'); return; }
+    if (variantNames.length && !allVariantsPicked()) {
+      toast.warn('Pilih ' + variantNames.join(' & ') + ' dulu');
+      return;
+    }
+    cart.add({
+      product_id: p.id, product_slug: p.slug, name: p.name, image: p.image, price: p.price,
+      stock: p.stock, vendor_id: v.id, vendor_name: v.name, vendor_username: v.username,
+      variant_selection: variantText(), qty
+    });
     toast.success('Ditambahkan ke keranjang');
   }
   function buyNow() {
+    if (auth.user?.role === 'ADMIN') { toast.warn('Admin tidak bisa berbelanja'); return; }
     addToCart();
     if (!auth.user) { goto('/login?next=/checkout'); return; }
     goto('/checkout');
@@ -92,16 +124,27 @@
 
   <div class="grid lg:grid-cols-2 gap-6 lg:gap-16 items-start">
     <div class="space-y-3">
-      <div class="aspect-square rounded-2xl sm:rounded-3xl overflow-hidden bg-ink-50">
-        <img src={p.image} alt={p.name} class="w-full h-full object-cover" />
+      <div class="relative aspect-square rounded-2xl sm:rounded-3xl overflow-hidden bg-ink-50 group">
+        <img src={images[activeImgIdx]} alt={p.name} class="w-full h-full object-cover cursor-zoom-in" on:click={() => zoomOpen = true} />
+        {#if images.length > 1}
+          <button type="button" on:click={prevImg} class="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 w-10 h-10 grid place-items-center bg-white/90 backdrop-blur rounded-full shadow-soft hover:bg-white" aria-label="Sebelumnya">
+            <Icon name="chevron-left" size={18} />
+          </button>
+          <button type="button" on:click={nextImg} class="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 w-10 h-10 grid place-items-center bg-white/90 backdrop-blur rounded-full shadow-soft hover:bg-white" aria-label="Berikutnya">
+            <Icon name="chevron-right" size={18} />
+          </button>
+          <span class="absolute bottom-3 right-3 bg-black/60 text-white text-xs px-2.5 py-1 rounded-full">{activeImgIdx + 1} / {images.length}</span>
+        {/if}
       </div>
-      <div class="grid grid-cols-5 gap-2">
-        {#each Array(5) as _, i}
-          <div class="aspect-square rounded-xl overflow-hidden bg-ink-50 border-2" class:border-ink-950={i===0} class:border-transparent={i!==0}>
-            <img src={p.image} alt="" class="w-full h-full object-cover" />
-          </div>
-        {/each}
-      </div>
+      {#if images.length > 1}
+        <div class="grid grid-cols-5 sm:grid-cols-6 gap-2">
+          {#each images.slice(0, 12) as src, i}
+            <button type="button" on:click={() => activeImgIdx = i} class="aspect-square rounded-xl overflow-hidden bg-ink-50 border-2 transition" class:border-ink-950={i===activeImgIdx} class:border-transparent={i!==activeImgIdx}>
+              <img src={src} alt="" class="w-full h-full object-cover" />
+            </button>
+          {/each}
+        </div>
+      {/if}
     </div>
 
     <div class="lg:sticky lg:top-24 space-y-5">
@@ -145,6 +188,28 @@
         <Icon name="store" size={18} class="text-ink-700 hidden sm:block" />
       </a>
 
+      <!-- Variant picker -->
+      {#if variantNames.length}
+        <div class="space-y-3">
+          {#each variantNames as vname}
+            <div>
+              <div class="text-sm font-medium mb-2">{vname}</div>
+              <div class="flex flex-wrap gap-2">
+                {#each p.variants[vname] as opt}
+                  <button type="button" on:click={() => pickedVariants = { ...pickedVariants, [vname]: opt }}
+                          class="px-3 py-1.5 rounded-full text-xs font-medium border transition
+                                 {pickedVariants[vname] === opt
+                                    ? 'bg-app-primary text-app-pfg border-app-primary'
+                                    : 'bg-white text-ink-700 border-ink-200 hover:border-ink-950'}">
+                    {opt}
+                  </button>
+                {/each}
+              </div>
+            </div>
+          {/each}
+        </div>
+      {/if}
+
       <div class="flex items-center gap-3 sm:gap-4">
         <span class="text-sm text-ink-700 w-16 sm:w-20">Jumlah</span>
         <div class="inline-flex items-center border border-ink-200 rounded-full">
@@ -155,18 +220,29 @@
         <span class="text-xs text-ink-500">Stok <b class="text-ink-700">{p.stock}</b></span>
       </div>
 
+      <!-- Action buttons -->
+      <!-- Mobile: cart=icon, beli=text; Desktop: keduanya pakai text + icon -->
       <div class="flex gap-2 sm:gap-3">
-        <button on:click={addToCart} class="btn-outline btn-md sm:btn-lg flex-1">
-          <Icon name="shopping-bag" size={16} /> <span class="hidden xs:inline">Keranjang</span>
+        <!-- Tambah keranjang: icon-only di mobile, icon + text di desktop -->
+        <button on:click={addToCart}
+                class="rounded-full transition inline-flex items-center justify-center border border-ink-300 hover:bg-ink-50
+                       h-11 w-11 sm:h-auto sm:w-auto sm:px-5 sm:py-3 sm:gap-2 sm:flex-1 shrink-0"
+                aria-label="Tambah ke keranjang">
+          <Icon name="shopping-bag" size={18} />
+          <span class="hidden sm:inline text-sm font-medium">Keranjang</span>
         </button>
-        <button on:click={buyNow} class="btn-primary btn-md sm:btn-lg flex-1">
-          <Icon name="zap" size={16} /> Beli Sekarang
+        <!-- Beli sekarang: full width di mobile dengan teks pas -->
+        <button on:click={buyNow}
+                class="btn-primary rounded-full inline-flex items-center justify-center gap-2 h-11 sm:h-auto sm:py-3 flex-1 text-sm font-medium px-4">
+          <Icon name="zap" size={16} />
+          <span>Beli Sekarang</span>
         </button>
+        <!-- Wishlist -->
         <button on:click={toggleWish}
-                class="btn-md sm:btn-lg !px-3 sm:!px-4 rounded-full transition
-                       {inWishlist ? 'bg-red-500 text-white hover:bg-red-600' : 'btn-outline'}"
+                class="rounded-full transition inline-flex items-center justify-center h-11 w-11 sm:h-12 sm:w-12 shrink-0
+                       {inWishlist ? 'bg-red-500 text-white hover:bg-red-600' : 'border border-ink-300 hover:bg-ink-50'}"
                 aria-label="Wishlist">
-          <Icon name="heart" size={16} fill={inWishlist ? 'currentColor' : 'none'} />
+          <Icon name="heart" size={18} fill={inWishlist ? 'currentColor' : 'none'} />
         </button>
       </div>
 
@@ -283,3 +359,22 @@
     </section>
   {/if}
 </div>
+
+<!-- Zoom lightbox -->
+{#if zoomOpen}
+  <div class="fixed inset-0 z-50 bg-black/90 grid place-items-center p-4 animate-fadeIn" on:click={() => zoomOpen = false} role="dialog" aria-modal="true">
+    <button type="button" on:click={() => zoomOpen = false} class="absolute top-4 right-4 w-10 h-10 grid place-items-center rounded-full bg-white/10 text-white hover:bg-white/20" aria-label="Tutup">
+      <Icon name="x" size={20} />
+    </button>
+    {#if images.length > 1}
+      <button type="button" on:click|stopPropagation={prevImg} class="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 grid place-items-center rounded-full bg-white/10 text-white hover:bg-white/20" aria-label="Sebelumnya">
+        <Icon name="chevron-left" size={24} />
+      </button>
+      <button type="button" on:click|stopPropagation={nextImg} class="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 grid place-items-center rounded-full bg-white/10 text-white hover:bg-white/20" aria-label="Berikutnya">
+        <Icon name="chevron-right" size={24} />
+      </button>
+      <span class="absolute bottom-4 left-1/2 -translate-x-1/2 bg-white/10 text-white text-xs px-3 py-1.5 rounded-full">{activeImgIdx + 1} / {images.length}</span>
+    {/if}
+    <img src={images[activeImgIdx]} alt={p.name} class="max-w-[95vw] max-h-[90vh] object-contain rounded-xl" on:click|stopPropagation />
+  </div>
+{/if}

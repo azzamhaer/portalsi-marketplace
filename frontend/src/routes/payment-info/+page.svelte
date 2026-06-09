@@ -38,7 +38,13 @@
       <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {#each ms as m}
           <div class="card !p-4 flex items-center gap-3">
-            <div class="w-10 h-10 rounded-lg grid place-items-center text-white text-xs font-bold" style:background={m.color}>{m.code.slice(0,3)}</div>
+            {#if m.icon}
+              <div class="w-10 h-10 rounded-lg overflow-hidden bg-white border border-ink-100 grid place-items-center">
+                <img src={m.icon} alt={m.name} class="w-full h-full object-contain" />
+              </div>
+            {:else}
+              <div class="w-10 h-10 rounded-lg grid place-items-center text-white text-xs font-bold" style:background={m.color}>{m.code.slice(0,3)}</div>
+            {/if}
             <div class="flex-1 min-w-0">
               <b class="text-sm block truncate">{m.name}</b>
               <small class="text-xs text-ink-500">Biaya: {m.fee_pct ? m.fee_pct + '%' : fmtRp(m.fee_flat)}</small>

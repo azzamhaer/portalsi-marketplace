@@ -36,8 +36,9 @@ class OrderController extends Controller
     {
         $data = $request->validate([
             'items'              => 'required|array|min:1',
-            'items.*.product_id' => 'required|exists:products,id',
-            'items.*.qty'        => 'required|integer|min:1',
+            'items.*.product_id'        => 'required|exists:products,id',
+            'items.*.qty'               => 'required|integer|min:1',
+            'items.*.variant_selection' => 'nullable|string|max:500',
             'recipient'          => 'required|string|max:255',
             'phone'              => 'required|string|max:20',
             'city'               => 'required|string|max:255',
@@ -73,12 +74,13 @@ class OrderController extends Controller
                     'quantity' => $it['qty'],
                 ];
                 $itemsForDb[] = [
-                    'product_id'    => $p->id,
-                    'vendor_id'     => $p->vendor_id,
-                    'product_name'  => $p->name,
-                    'product_image' => $p->image,
-                    'price'         => $p->price,
-                    'quantity'      => $it['qty'],
+                    'product_id'        => $p->id,
+                    'vendor_id'         => $p->vendor_id,
+                    'product_name'      => $p->name,
+                    'product_image'     => $p->image,
+                    'price'             => $p->price,
+                    'quantity'          => $it['qty'],
+                    'variant_selection' => $it['variant_selection'] ?? null,
                 ];
             }
 
@@ -152,11 +154,45 @@ class OrderController extends Controller
                 'raw_response' => json_encode($trx['raw']),
             ]);
 
+            // Kirim email konfirmasi pesanan (non-blocking; gagal ditangani service)
+            $this->sendOrderEmail($order->fresh(), $request->user(), 'created');
+
             return response()->json([
                 'order_id'     => $order->id,
                 'order_number' => $orderNumber,
             ]);
         });
+    }
+
+    protected function sendOrderEmail($order, $user, string $event): void
+    {
+        if (!$user || !$user->email) return;
+        $brevo = new \App\Services\BrevoService();
+        $appName = \App\Models\Setting::get('app_name', 'MPSI');
+        $frontUrl = rtrim(config('services.frontend_url', 'http://localhost:5173'), '/');
+        $link = $frontUrl . '/orders/' . $order->id;
+        $title = match ($event) {
+            'created'    => 'Pesanan Diterima',
+            'paid'       => 'Pembayaran Berhasil',
+            'shipped'    => 'Pesanan Anda Sedang Dikirim',
+            'done'       => 'Pesanan Selesai',
+            'cancelled'  => 'Pesanan Dibatalkan',
+            default      => 'Update Pesanan',
+        };
+        $intro = match ($event) {
+            'created'   => "Terima kasih sudah berbelanja di {$appName}. Pesanan Anda <b>{$order->order_number}</b> telah dibuat dan menunggu pembayaran.",
+            'paid'      => "Pembayaran untuk pesanan <b>{$order->order_number}</b> telah diterima. Penjual akan segera memproses.",
+            'shipped'   => "Pesanan <b>{$order->order_number}</b> sudah dikirim" . ($order->tracking_no ? " dengan nomor resi <b>{$order->tracking_no}</b>" : '') . ".",
+            'done'      => "Pesanan <b>{$order->order_number}</b> sudah selesai. Terima kasih atas kepercayaan Anda.",
+            'cancelled' => "Pesanan <b>{$order->order_number}</b> dibatalkan.",
+            default     => "Status pesanan <b>{$order->order_number}</b> diperbarui.",
+        };
+        $body = "<p>Hai <b>" . htmlspecialchars($user->name) . "</b>,</p>
+                 <p>{$intro}</p>
+                 <p>Total: <b>Rp " . number_format($order->total, 0, ',', '.') . "</b></p>";
+        $brevo->send($user->email, $user->name, $title . ' #' . $order->order_number,
+            $brevo->layout($title, $body, $link, 'Lihat Detail Pesanan')
+        );
     }
 
     public function refreshStatus(Request $request, $id)
@@ -176,10 +212,12 @@ class OrderController extends Controller
             $p->update(['status' => 'PAID', 'paid_at' => now(), 'raw_response' => json_encode($detail)]);
             $order->update(['status' => 'PROCESSING', 'paid_at' => now()]);
             $changed = true;
+            $this->sendOrderEmail($order->fresh()->load('user'), $order->user, 'paid');
         } elseif (in_array($status, ['EXPIRED', 'FAILED', 'REFUND'])) {
             $p->update(['status' => $status, 'raw_response' => json_encode($detail)]);
             $order->update(['status' => $status === 'EXPIRED' ? 'EXPIRED' : 'CANCELLED']);
             $changed = true;
+            $this->sendOrderEmail($order->fresh()->load('user'), $order->user, 'cancelled');
         }
         return response()->json(['changed' => $changed, 'status' => $status]);
     }
@@ -190,6 +228,7 @@ class OrderController extends Controller
         $order = Order::with('payment')->where('user_id', $request->user()->id)->findOrFail($id);
         $order->payment?->update(['status' => 'PAID', 'paid_at' => now()]);
         $order->update(['status' => 'PROCESSING', 'paid_at' => now()]);
+        $this->sendOrderEmail($order->fresh(), $request->user(), 'paid');
         return response()->json(['ok' => true]);
     }
 
@@ -197,11 +236,15 @@ class OrderController extends Controller
     {
         $order = Order::where('user_id', $request->user()->id)->findOrFail($id);
         $order->update(['status' => 'DONE', 'done_at' => now()]);
+        $this->sendOrderEmail($order->fresh(), $request->user(), 'done');
         return response()->json(['ok' => true]);
     }
 
     public function paymentMethods()
     {
+        // Kalau admin sudah set di DB, pakai itu. Kalau belum, fallback ke METHODS default.
+        $db = \App\Models\PaymentMethod::where('is_active', true)->orderBy('group')->orderBy('sort_order')->get();
+        if ($db->isNotEmpty()) return response()->json($db);
         return response()->json(\App\Services\TripayService::METHODS);
     }
 

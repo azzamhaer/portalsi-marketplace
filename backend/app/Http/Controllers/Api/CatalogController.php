@@ -16,10 +16,37 @@ class CatalogController extends Controller
         return response()->json(Category::orderBy('sort_order')->get());
     }
 
+    /** Suggestion live untuk search bar — produk + toko + tag */
+    public function searchSuggest(Request $request)
+    {
+        $q = trim((string) $request->query('q'));
+        if (strlen($q) < 1) {
+            return response()->json(['products' => [], 'vendors' => [], 'tags' => []]);
+        }
+        $products = Product::where('is_active', true)
+            ->where('name', 'like', "%$q%")
+            ->select('id', 'name', 'slug', 'image', 'price')
+            ->take(6)->get();
+        $vendors = Vendor::where('verification_status', 'APPROVED')
+            ->where(fn($w) => $w->where('name', 'like', "%$q%")->orWhere('username', 'like', "%$q%"))
+            ->select('id', 'name', 'username', 'avatar', 'city')
+            ->take(4)->get();
+        $tags = Tag::where('slug', 'like', "%$q%")
+            ->orderByDesc('product_count')
+            ->select('slug', 'name', 'product_count')
+            ->take(6)->get();
+        return response()->json([
+            'products' => $products,
+            'vendors'  => $vendors,
+            'tags'     => $tags,
+        ]);
+    }
+
     public function products(Request $request)
     {
         $q = Product::query()->where('is_active', true)
-            ->with(['vendor:id,name,slug,city,is_official', 'tagModels:id,slug']);
+            ->with(['vendor:id,name,slug,city,is_official', 'tagModels:id,slug'])
+            ->withCount('reviews');
 
         if ($cat = $request->query('category')) {
             $q->whereHas('category', fn($c) => $c->where('slug', $cat));
@@ -52,14 +79,18 @@ class CatalogController extends Controller
         return response()->json($q->paginate($perPage));
     }
 
-    public function product($id)
+    public function product($idOrSlug)
     {
-        $product = Product::with([
+        $query = Product::with([
             'vendor',
             'category',
             'tagModels:id,slug',
             'reviews' => fn($q) => $q->latest()->with('user:id,name'),
-        ])->findOrFail($id);
+        ])->withCount('reviews');
+        $product = is_numeric($idOrSlug)
+            ? $query->find((int) $idOrSlug)
+            : $query->where('slug', $idOrSlug)->first();
+        if (!$product) abort(404, 'Produk tidak ditemukan');
         $related = Product::where('id', '!=', $product->id)
             ->where('is_active', true)
             ->whereHas('tagModels', function ($q) use ($product) {
@@ -88,7 +119,6 @@ class CatalogController extends Controller
 
     public function vendor(Request $request, $idOrUsername)
     {
-        // Cari berdasarkan ID kalau numeric, kalau tidak coba username → slug
         $key = strtolower((string) $idOrUsername);
         $vendor = is_numeric($idOrUsername)
             ? Vendor::find((int) $idOrUsername)
@@ -96,7 +126,22 @@ class CatalogController extends Controller
 
         if (!$vendor) abort(404, 'Toko tidak ditemukan');
 
-        $products = $vendor->products()->where('is_active', true)->with('tagModels:id,slug')->orderByDesc('sold')->get();
+        // Block halaman publik kalau vendor belum APPROVED — kecuali admin atau pemilik toko
+        $viewer = auth('sanctum')->user();
+        $isOwner = $viewer && $viewer->id === $vendor->user_id;
+        $isAdmin = $viewer && $viewer->role === 'ADMIN';
+        if ($vendor->verification_status !== 'APPROVED' && !$isOwner && !$isAdmin) {
+            abort(404, 'Toko tidak ditemukan');
+        }
+
+        // Rating toko = AVG rating semua produk yang punya review
+        $avgRating = (float) \App\Models\Product::where('vendor_id', $vendor->id)
+            ->whereHas('reviews')->avg('rating');
+        if (abs($vendor->rating - $avgRating) > 0.01) {
+            $vendor->update(['rating' => round($avgRating, 2)]);
+        }
+
+        $products = $vendor->products()->where('is_active', true)->with('tagModels:id,slug')->withCount('reviews')->orderByDesc('sold')->get();
         // Try to detect auth (sanctum guard) silently
         $user = auth('sanctum')->user();
         $isFollowing = false;
@@ -115,8 +160,8 @@ class CatalogController extends Controller
     {
         return response()->json([
             'tags'        => Tag::orderByDesc('product_count')->take(20)->get(['slug', 'name', 'product_count as count']),
-            'flashSale'   => Product::where('is_flash_sale', true)->where('is_active', true)->with('tagModels:id,slug')->take(12)->get(),
-            'recommended' => Product::where('is_active', true)->with('tagModels:id,slug')->orderByDesc('sold')->take(24)->get(),
+            'flashSale'   => Product::where('is_flash_sale', true)->where('is_active', true)->with('tagModels:id,slug')->withCount('reviews')->take(12)->get(),
+            'recommended' => Product::where('is_active', true)->with('tagModels:id,slug')->withCount('reviews')->orderByDesc('sold')->take(24)->get(),
             'official'    => Vendor::where('is_official', true)->where('verification_status', 'APPROVED')->take(6)->get(),
         ]);
     }

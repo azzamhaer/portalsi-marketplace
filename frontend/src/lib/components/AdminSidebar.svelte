@@ -2,14 +2,15 @@
   import Icon from './Icon.svelte';
   import { page } from '$app/stores';
   const items = [
-    { href:'/admin',                 label:'Dashboard',     icon:'layout-dashboard' },
-    { href:'/admin/users',           label:'Users',         icon:'users' },
-    { href:'/admin/vendors',         label:'Vendor & KTP',  icon:'store' },
-    { href:'/admin/orders',          label:'Pesanan',       icon:'shopping-cart' },
-    { href:'/admin/returns',         label:'Pengembalian',  icon:'undo-2' },
-    { href:'/admin/withdrawals',     label:'Penarikan',     icon:'wallet' },
-    { href:'/admin/shipping',        label:'Opsi Kurir',    icon:'truck' },
-    { href:'/admin/settings',        label:'Pengaturan',    icon:'settings' }
+    { href:'/admin',                  label:'Dashboard',     icon:'layout-dashboard' },
+    { href:'/admin/users',            label:'Users',         icon:'users' },
+    { href:'/admin/vendors',          label:'Vendor & KTP',  icon:'store' },
+    { href:'/admin/orders',           label:'Pesanan',       icon:'shopping-cart' },
+    { href:'/admin/returns',          label:'Pengembalian',  icon:'undo-2' },
+    { href:'/admin/withdrawals',      label:'Penarikan',     icon:'wallet' },
+    { href:'/admin/shipping',         label:'Opsi Kurir',    icon:'truck' },
+    { href:'/admin/appearance',       label:'Tampilan',      icon:'palette' },
+    { href:'/admin/settings',         label:'Pengaturan',    icon:'settings' }
   ];
 </script>
 

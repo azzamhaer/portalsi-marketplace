@@ -3,4 +3,4 @@
   let { children } = $props();
 </script>
 
-<AuthGuard>{@render children()}</AuthGuard>
+<AuthGuard blockAdmin>{@render children()}</AuthGuard>

@@ -32,6 +32,9 @@
       <div><label class="label">Password</label>
         <input type="password" required autocomplete="current-password" bind:value={password} class="input" />
       </div>
+      <div class="text-right -mt-2">
+        <a href="/forgot-password" class="text-xs text-ink-500 hover:text-ink-950">Lupa password?</a>
+      </div>
       <button disabled={loading} class="btn-primary btn-lg w-full">{loading ? 'Memproses…' : 'Masuk'}</button>
     </form>
     <p class="text-center text-sm text-ink-500 mt-6">

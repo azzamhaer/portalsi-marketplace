@@ -1,6 +1,7 @@
 <script lang="ts">
   import Icon from '$lib/components/Icon.svelte';
   import LoginRequired from '$lib/components/LoginRequired.svelte';
+  import AdminBlock from '$lib/components/AdminBlock.svelte';
   import { cart, auth, toast } from '$lib/stores.svelte';
   import { fmtRp } from '$lib/utils';
   import { goto } from '$app/navigation';
@@ -28,6 +29,8 @@
     title="Login untuk melihat keranjang"
     description="Masuk ke akun Anda untuk melihat dan checkout produk di keranjang."
   />
+{:else if auth.user.role === 'ADMIN'}
+  <AdminBlock title="Admin tidak punya keranjang" description="Akun admin tidak bisa berbelanja. Gunakan akun pembeli." />
 {:else}
 <div class="container-x py-6 sm:py-8">
   <h1 class="section-title mb-6 sm:mb-8">Keranjang</h1>
@@ -61,11 +64,12 @@
             {#each items as it (it.product_id)}
               <div class="flex items-start sm:items-center gap-3 py-3 border-b border-ink-100 last:border-0">
                 <input type="checkbox" checked={it.checked} on:change={() => cart.toggleCheck(it.product_id)} class="mt-2 sm:mt-0" />
-                <a href={`/product/${it.product_id}`} class="shrink-0">
+                <a href={`/product/${it.product_slug || it.product_id}`} class="shrink-0">
                   <img src={it.image} alt="" class="w-16 h-16 sm:w-20 sm:h-20 rounded-xl object-cover" />
                 </a>
                 <div class="flex-1 min-w-0">
-                  <a href={`/product/${it.product_id}`} class="font-medium line-clamp-2 hover:text-ink-950 text-sm">{it.name}</a>
+                  <a href={`/product/${it.product_slug || it.product_id}`} class="font-medium line-clamp-2 hover:text-ink-950 text-sm">{it.name}</a>
+                  {#if it.variant_selection}<div class="text-[10px] text-ink-500 mt-0.5">{it.variant_selection}</div>{/if}
                   <div class="text-sm font-semibold text-ink-950 mt-1">{fmtRp(it.price)}</div>
                   <div class="flex items-center gap-2 mt-2 sm:hidden">
                     <div class="inline-flex items-center border border-ink-200 rounded-full">

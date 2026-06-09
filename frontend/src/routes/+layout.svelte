@@ -3,14 +3,25 @@
   import Header from '$lib/components/Header.svelte';
   import Footer from '$lib/components/Footer.svelte';
   import Toaster from '$lib/components/Toaster.svelte';
+  import EmailVerificationGate from '$lib/components/EmailVerificationGate.svelte';
   import { onMount } from 'svelte';
   import { auth, settings, wishlist, applyPalette } from '$lib/stores.svelte';
   import { apiEndpoints, getToken } from '$lib/api';
+  import { page } from '$app/stores';
 
-  let { children } = $props();
+  let { data, children } = $props();
+
+  // Pages yang TIDAK perlu email verifikasi (selalu boleh diakses)
+  const PUBLIC_PATHS = ['/login', '/register', '/forgot-password', '/reset-password', '/verify-email', '/confirm-email'];
+  const isExempt = $derived(PUBLIC_PATHS.some((p) => $page.url.pathname === p || $page.url.pathname.startsWith(p + '/')));
+  const needsVerify = $derived(!!auth.user && !auth.user.email_verified_at && !isExempt);
+
+  // Apply server-loaded settings IMMEDIATELY (no flash)
+  if (data?.settings) settings.setAll(data.settings);
 
   onMount(async () => {
     applyPalette({ primary: settings.primary, primaryFg: settings.primaryFg, accent: settings.accent });
+    // Re-fetch settings client-side untuk sinkronisasi terbaru (background)
     try {
       const s: any = await apiEndpoints.publicSettings();
       settings.setAll(s);
@@ -20,7 +31,6 @@
     }
   });
 
-  // Setiap kali auth.user berubah (login/logout), sinkron wishlist dari server
   let lastSyncedUserId = $state<number | null>(null);
   $effect(() => {
     const u = auth.user;
@@ -43,11 +53,24 @@
   {:else}
     <link rel="icon" href="/favicon.svg" />
   {/if}
+  <style>
+    :root {
+      --app-primary: {settings.primary || '#0a0a0a'};
+      --app-primary-fg: {settings.primaryFg || '#ffffff'};
+      --app-accent: {settings.accent || '#6366f1'};
+    }
+  </style>
 </svelte:head>
 
 <div class="min-h-screen flex flex-col">
   <Header />
-  <main class="flex-1">{@render children()}</main>
+  <main class="flex-1">
+    {#if needsVerify}
+      <EmailVerificationGate />
+    {:else}
+      {@render children()}
+    {/if}
+  </main>
   <Footer />
   <Toaster />
 </div>

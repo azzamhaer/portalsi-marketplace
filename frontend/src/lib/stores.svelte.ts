@@ -9,6 +9,12 @@ function createAuthStore() {
     const cached = localStorage.getItem('pm_user');
     if (cached) try { user = JSON.parse(cached); } catch {}
     loading = false;
+    // Cross-tab sync: kalau tab lain update auth.user, tab ini juga ikut
+    window.addEventListener('storage', (e) => {
+      if (e.key === 'pm_user') {
+        try { user = e.newValue ? JSON.parse(e.newValue) : null; } catch {}
+      }
+    });
   }
 
   return {
@@ -35,12 +41,14 @@ export const auth = createAuthStore();
 /* ===== Cart store ===== */
 export interface CartItem {
   product_id: number;
+  product_slug?: string | null;
   name: string;
   image: string;
   price: number;
   vendor_id: number;
   vendor_name: string;
   vendor_username?: string | null;
+  variant_selection?: string | null;
   qty: number;
   stock: number;
   checked: boolean;

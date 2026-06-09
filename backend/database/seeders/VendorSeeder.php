@@ -60,7 +60,8 @@ class VendorSeeder extends Seeder
                 'bank_name'   => 'BCA',
                 'bank_account'=> '1234567890',
                 'bank_holder' => $v['name'],
-                'rating'      => $v['rating'],
+                // Rating real — start 0, naik saat ada review pembeli
+                'rating'      => 0,
                 'total_sold'  => $v['sold'],
                 'followers'   => $v['fol'],
                 'is_official' => $v['official'],

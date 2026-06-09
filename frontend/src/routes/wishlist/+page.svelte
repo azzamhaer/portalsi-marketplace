@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import Icon from '$lib/components/Icon.svelte';
   import LoginRequired from '$lib/components/LoginRequired.svelte';
+  import AdminBlock from '$lib/components/AdminBlock.svelte';
   import { auth } from '$lib/stores.svelte';
   import { apiEndpoints } from '$lib/api';
   import ProductGrid from '$lib/components/ProductGrid.svelte';
@@ -26,6 +27,8 @@
     title="Login untuk melihat wishlist"
     description="Simpan produk favorit Anda dan akses dari perangkat manapun setelah masuk."
   />
+{:else if auth.user.role === 'ADMIN'}
+  <AdminBlock title="Admin tidak punya wishlist" description="Akun admin tidak bisa menyimpan wishlist. Gunakan akun pembeli." />
 {:else}
   <div class="container-x py-8">
     <h1 class="section-title mb-8">Wishlist</h1>

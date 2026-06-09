@@ -46,6 +46,10 @@ class SettingsController extends Controller
             'tripay_private_key' => Setting::get('tripay_private_key', ''),
             'tripay_merchant_code' => Setting::get('tripay_merchant_code', ''),
             'commission_percent' => (float) Setting::get('commission_percent', 5),
+            // Brevo (email)
+            'brevo_api_key'      => Setting::get('brevo_api_key', ''),
+            'brevo_sender_email' => Setting::get('brevo_sender_email', ''),
+            'brevo_sender_name'  => Setting::get('brevo_sender_name', ''),
             // Custom page content
             'hero_title'    => Setting::get('hero_title', 'Belanja yang membuat hidup lebih mudah.'),
             'hero_subtitle' => Setting::get('hero_subtitle', 'Ribuan produk pilihan dari toko terverifikasi. Pembayaran aman, pengiriman cepat.'),
@@ -81,6 +85,9 @@ class SettingsController extends Controller
             'tripay_private_key' => 'sometimes|string',
             'tripay_merchant_code' => 'sometimes|string',
             'commission_percent'   => 'sometimes|numeric|min:0|max:50',
+            'brevo_api_key'        => 'sometimes|nullable|string',
+            'brevo_sender_email'   => 'sometimes|nullable|email',
+            'brevo_sender_name'    => 'sometimes|nullable|string|max:100',
             'hero_title'    => 'sometimes|string|max:200',
             'hero_subtitle' => 'sometimes|string|max:500',
             'hero_cta_label'=> 'sometimes|string|max:50',

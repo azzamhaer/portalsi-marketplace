@@ -55,7 +55,7 @@
     loading = true;
     try {
       const res: any = await apiEndpoints.checkout({
-        items: items.map(i => ({ product_id: i.product_id, qty: i.qty })),
+        items: items.map(i => ({ product_id: i.product_id, qty: i.qty, variant_selection: i.variant_selection ?? null })),
         recipient, phone, city, full_address: full, notes,
         courier_name: courier.name, courier_eta: courier.eta, courier_cost: courier.cost,
         payment_method: pay,

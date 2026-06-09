@@ -15,7 +15,7 @@ class Product extends Model
     protected $fillable = [
         'vendor_id', 'category_id', 'name', 'slug', 'description',
         'price', 'original_price', 'stock', 'sold', 'rating', 'weight',
-        'image', 'is_active', 'is_flash_sale'
+        'image', 'images', 'variants', 'is_active', 'is_flash_sale'
     ];
 
     protected $casts = [
@@ -24,6 +24,8 @@ class Product extends Model
         'rating'        => 'float',
         'price'         => 'integer',
         'original_price'=> 'integer',
+        'images'        => 'array',
+        'variants'      => 'array',
     ];
 
     protected $appends = ['tags'];
