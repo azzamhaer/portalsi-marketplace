@@ -10,9 +10,17 @@
   let ktpData = $state('');
   let saving = $state(false);
 
-  onMount(() => {
+  onMount(async () => {
     if (!auth.user) goto('/login?next=/seller/register');
-    else if (auth.user.vendor_id) goto('/seller/dashboard');
+    else if (auth.user.vendor_id) {
+      try {
+        const me: any = await apiEndpoints.me();
+        auth.set(me);
+        goto(me.vendor_status === 'APPROVED' ? '/seller/dashboard' : '/seller/pending');
+      } catch {
+        goto(auth.user.vendor_status === 'APPROVED' ? '/seller/dashboard' : '/seller/pending');
+      }
+    }
   });
 
   function onKtp(e: any) {

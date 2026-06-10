@@ -17,6 +17,17 @@
     if (!auth.user) { goto('/login?next=/seller/dashboard'); return; }
     try {
       data = await apiEndpoints.sellerDashboard();
+      auth.set({
+        ...auth.user,
+        vendor_id: data.vendor.id,
+        vendor_status: data.vendor.verification_status,
+        vendor_username: data.vendor.username,
+        vendor_tour_done: data.vendor.tour_completed_at !== null
+      });
+      if (data?.vendor?.verification_status !== 'APPROVED') {
+        goto('/seller/pending');
+        return;
+      }
       // Tour kalau toko APPROVED tapi tour_completed_at masih null
       if (data?.vendor?.verification_status === 'APPROVED' && !data.vendor.tour_completed_at) {
         // Beri waktu DOM render dulu

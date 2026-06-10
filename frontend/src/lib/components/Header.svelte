@@ -190,7 +190,9 @@
                   <button type="button" on:click={() => nav('/wishlist')} class="block w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-ink-50">Wishlist</button>
                   <button type="button" on:click={() => nav('/chats')}    class="block w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-ink-50">Chat</button>
                   {#if auth.user.vendor_id}
-                    <button type="button" on:click={() => nav('/seller/dashboard')} class="block w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-ink-50">Seller Center</button>
+                    <button type="button" on:click={() => nav(auth.user.vendor_status === 'APPROVED' ? '/seller/dashboard' : '/seller/pending')} class="block w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-ink-50">
+                      {auth.user.vendor_status === 'APPROVED' ? 'Seller Center' : 'Status Toko'}
+                    </button>
                   {:else}
                     <button type="button" on:click={() => nav('/seller/register')} class="block w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-ink-50">Buka Toko</button>
                   {/if}
@@ -231,7 +233,9 @@
             {#if isAdmin}
               <a href="/admin" on:click={() => mobileOpen = false} class="px-3 py-2.5 rounded-lg bg-app-primary text-app-pfg">Admin Center</a>
             {:else if auth.user.vendor_id}
-              <a href="/seller/dashboard" on:click={() => mobileOpen = false} class="px-3 py-2.5 rounded-lg hover:bg-ink-50">Seller Center</a>
+              <a href={auth.user.vendor_status === 'APPROVED' ? '/seller/dashboard' : '/seller/pending'} on:click={() => mobileOpen = false} class="px-3 py-2.5 rounded-lg hover:bg-ink-50">
+                {auth.user.vendor_status === 'APPROVED' ? 'Seller Center' : 'Status Toko'}
+              </a>
             {:else}
               <a href="/seller/register" on:click={() => mobileOpen = false} class="px-3 py-2.5 rounded-lg hover:bg-ink-50">Buka Toko</a>
             {/if}

@@ -21,6 +21,9 @@ class WithdrawalController extends Controller
     {
         $vendor = $request->user()->vendor;
         if (!$vendor) return response()->json(['message' => 'Belum punya toko'], 404);
+        if ($vendor->verification_status !== 'APPROVED') {
+            return response()->json(['message' => 'Toko belum terverifikasi'], 403);
+        }
 
         $commissionPct = (float) (Setting::get('commission_percent', 5));
 
@@ -57,7 +60,7 @@ class WithdrawalController extends Controller
     {
         $vendor = $request->user()->vendor;
         if (!$vendor) return response()->json(['message' => 'Belum punya toko'], 404);
-        if ($vendor->verification_status !== 'APPROVED') return response()->json(['message' => 'Toko belum terverifikasi'], 422);
+        if ($vendor->verification_status !== 'APPROVED') return response()->json(['message' => 'Toko belum terverifikasi'], 403);
         if (!$vendor->bank_name || !$vendor->bank_account || !$vendor->bank_holder)
             return response()->json(['message' => 'Lengkapi data bank di Profil Toko dulu'], 422);
 
@@ -91,6 +94,8 @@ class WithdrawalController extends Controller
     public function cancel(Request $request, $id)
     {
         $vendor = $request->user()->vendor;
+        if (!$vendor) return response()->json(['message' => 'Belum punya toko'], 404);
+        if ($vendor->verification_status !== 'APPROVED') return response()->json(['message' => 'Toko belum terverifikasi'], 403);
         $w = Withdrawal::where('vendor_id', $vendor?->id)->findOrFail($id);
         if ($w->status !== 'PENDING') return response()->json(['message' => 'Hanya request PENDING yang bisa dibatalkan'], 422);
         $w->delete();

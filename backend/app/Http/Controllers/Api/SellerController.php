@@ -57,6 +57,21 @@ class SellerController extends Controller
             'bank_holder' => $data['bank_holder'] ?? null,
         ]);
         $user->update(['role' => 'SELLER']);
+
+        // Notifikasi ke SEMUA admin agar review pendaftaran ini
+        $admins = \App\Models\User::where('role', 'ADMIN')->pluck('id');
+        foreach ($admins as $adminId) {
+            \App\Models\UserNotification::send(
+                $adminId,
+                'VENDOR_PENDING_APPROVAL',
+                'Pendaftaran vendor baru',
+                "Toko \"{$vendor->name}\" (oleh {$user->name}) menunggu approval verifikasi KTP.",
+                '/admin/vendors?status=PENDING',
+                'INFO',
+                ['vendor_id' => $vendor->id, 'user_id' => $user->id]
+            );
+        }
+
         return response()->json($vendor, 201);
     }
 
@@ -64,6 +79,19 @@ class SellerController extends Controller
     {
         $vendor = $request->user()->vendor;
         if (!$vendor) return response()->json(['message' => 'Belum punya toko'], 404);
+
+        if ($vendor->verification_status !== 'APPROVED') {
+            return response()->json([
+                'vendor' => $vendor,
+                'stats' => [
+                    'orders_24h' => 0,
+                    'revenue_30d' => 0,
+                    'active_products' => 0,
+                    'rating' => $vendor->rating,
+                ],
+                'recent_orders' => [],
+            ]);
+        }
 
         return response()->json([
             'vendor' => $vendor,
@@ -81,8 +109,7 @@ class SellerController extends Controller
 
     public function updateProfile(Request $request)
     {
-        $vendor = $request->user()->vendor;
-        if (!$vendor) abort(404);
+        $vendor = $this->requireApprovedVendor($request);
         $data = $request->validate([
             'name'         => 'sometimes|string|max:255',
             'city'         => 'sometimes|string|max:255',
@@ -103,17 +130,13 @@ class SellerController extends Controller
 
     public function products(Request $request)
     {
-        $vendor = $request->user()->vendor;
-        if (!$vendor) return response()->json(['message' => 'Belum punya toko'], 404);
+        $vendor = $this->requireApprovedVendor($request);
         return response()->json(Product::where('vendor_id', $vendor->id)->with(['tagModels:id,slug'])->orderByDesc('id')->get());
     }
 
     public function storeProduct(Request $request)
     {
-        $vendor = $request->user()->vendor;
-        if (!$vendor) return response()->json(['message' => 'Belum punya toko'], 422);
-        if ($vendor->verification_status === 'PENDING') return response()->json(['message' => 'Toko Anda menunggu verifikasi admin'], 422);
-        if ($vendor->verification_status === 'REJECTED') return response()->json(['message' => 'Verifikasi toko ditolak: '.$vendor->verification_note], 422);
+        $vendor = $this->requireApprovedVendor($request);
 
         $data = $request->validate([
             'name'           => 'required|string|max:255',
@@ -156,7 +179,7 @@ class SellerController extends Controller
 
     public function updateProduct(Request $request, $id)
     {
-        $vendor = $request->user()->vendor;
+        $vendor = $this->requireApprovedVendor($request);
         $product = Product::where('vendor_id', $vendor?->id)->findOrFail($id);
         $data = $request->validate([
             'name'           => 'sometimes|string|max:255',
@@ -183,7 +206,7 @@ class SellerController extends Controller
 
     public function deleteProduct(Request $request, $id)
     {
-        $vendor = $request->user()->vendor;
+        $vendor = $this->requireApprovedVendor($request);
         $product = Product::where('vendor_id', $vendor?->id)->findOrFail($id);
         if (OrderItem::where('product_id', $product->id)->exists()) {
             $product->update(['is_active' => false, 'stock' => 0]);
@@ -195,8 +218,7 @@ class SellerController extends Controller
 
     public function orders(Request $request)
     {
-        $vendor = $request->user()->vendor;
-        if (!$vendor) return response()->json(['message' => 'Belum punya toko'], 404);
+        $vendor = $this->requireApprovedVendor($request);
         return response()->json(
             OrderItem::where('vendor_id', $vendor->id)
                 ->with(['order.user:id,name,email', 'order.address:id,recipient,city,phone', 'order.payment:id,order_id,method_name,status'])
@@ -206,7 +228,7 @@ class SellerController extends Controller
 
     public function shipOrder(Request $request, $id)
     {
-        $vendor = $request->user()->vendor;
+        $vendor = $this->requireApprovedVendor($request);
         $order = Order::whereHas('items', fn($q) => $q->where('vendor_id', $vendor?->id))->with('user')->findOrFail($id);
         $tracking = $this->makeTrackingNumber($order->courier_name ?? 'JNE');
         $order->update(['status' => 'SHIPPED', 'shipped_at' => now(), 'tracking_no' => $tracking]);
@@ -227,16 +249,14 @@ class SellerController extends Controller
 
     public function dismissWarning(Request $request)
     {
-        $vendor = $request->user()->vendor;
-        if (!$vendor) abort(404);
+        $vendor = $this->requireApprovedVendor($request);
         $vendor->update(['warning_dismissed_at' => now()]);
         return response()->json(['ok' => true]);
     }
 
     public function finishTour(Request $request)
     {
-        $vendor = $request->user()->vendor;
-        if (!$vendor) abort(404);
+        $vendor = $this->requireApprovedVendor($request);
         if (!$vendor->tour_completed_at) {
             $vendor->update(['tour_completed_at' => now()]);
         }
@@ -245,8 +265,7 @@ class SellerController extends Controller
 
     public function updateUsername(Request $request)
     {
-        $vendor = $request->user()->vendor;
-        if (!$vendor) return response()->json(['message' => 'Belum punya toko'], 404);
+        $vendor = $this->requireApprovedVendor($request);
 
         $data = $request->validate([
             'username' => ['required', 'string', 'min:3', 'max:30', 'regex:/^[a-z0-9][a-z0-9_-]*$/'],
@@ -303,6 +322,22 @@ class SellerController extends Controller
         };
         $number = str_pad((string) random_int(0, 9_999_999_999), 10, '0', STR_PAD_LEFT);
         return $prefix . $number;
+    }
+
+    private function requireApprovedVendor(Request $request): Vendor
+    {
+        $vendor = $request->user()->vendor;
+        if (!$vendor) abort(404, 'Belum punya toko');
+        if ($vendor->verification_status === 'PENDING') {
+            abort(403, 'Toko Anda masih menunggu verifikasi admin');
+        }
+        if ($vendor->verification_status === 'REJECTED') {
+            abort(403, 'Verifikasi toko ditolak' . ($vendor->verification_note ? ': ' . $vendor->verification_note : ''));
+        }
+        if ($vendor->verification_status !== 'APPROVED') {
+            abort(403, 'Toko belum terverifikasi');
+        }
+        return $vendor;
     }
 
     private function makeProductSlug(string $name): string

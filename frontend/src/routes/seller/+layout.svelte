@@ -10,14 +10,14 @@
   let { children } = $props();
   let mounted = $state(false);
   let serverChecked = $state(false);
+  let checking = $state(true);
 
   const isAdmin = $derived(auth.user?.role === 'ADMIN');
-  // Cek dari auth.user dulu (cache) - INSTAN, no flash
-  const vendorStatus = $derived(auth.user?.vendor_status); // APPROVED | PENDING | REJECTED | undefined
+  const vendorStatus = $derived(auth.user?.vendor_status);
   const hasVendor = $derived(!!auth.user?.vendor_id);
 
   const path = $derived($page.url.pathname);
-  const exempt = ['/seller/register', '/seller/pending', '/seller/profile'];
+  const exempt = ['/seller/register', '/seller/pending'];
   const isExempt = $derived(exempt.includes(path));
 
   onMount(async () => {
@@ -26,42 +26,47 @@
       goto('/login?next=' + path);
       return;
     }
-    if (auth.user.role === 'ADMIN') return;
-
-    // Jalur exempt: tidak butuh server check
-    if (isExempt) { serverChecked = true; return; }
-
-    // Sudah punya status dari cache → langsung putuskan
-    if (hasVendor) {
-      if (vendorStatus === 'APPROVED') { serverChecked = true; return; }
-      // PENDING / REJECTED → redirect ke pending
-      goto('/seller/pending');
+    if (auth.user.role === 'ADMIN') {
+      checking = false;
       return;
     }
 
-    // Tidak punya vendor_id → coba server check dulu (mungkin cache outdated)
     try {
-      const data: any = await apiEndpoints.sellerDashboard();
-      const status = data?.vendor?.verification_status;
-      // Sync auth cache
-      auth.set({ ...auth.user, vendor_id: data.vendor.id, vendor_status: status, vendor_username: data.vendor.username });
-      if (status !== 'APPROVED') { goto('/seller/pending'); return; }
+      const me: any = await apiEndpoints.me();
+      auth.set(me);
+
+      if (isExempt) {
+        serverChecked = true;
+        return;
+      }
+
+      if (!me.vendor_id) {
+        goto('/seller/register');
+        return;
+      }
+
+      if (me.vendor_status !== 'APPROVED') {
+        goto('/seller/pending');
+        return;
+      }
+
       serverChecked = true;
     } catch (e: any) {
-      if (e.status === 404) goto('/seller/register');
-      else { toast.error(e.message); goto('/'); }
+      toast.error(e.message);
+      goto('/');
+    } finally {
+      checking = false;
     }
   });
 </script>
 
 {#if isAdmin}
   <AdminBlock title="Admin tidak bisa menjadi seller" description="Akun admin dipakai untuk mengelola platform, bukan untuk berjualan." />
-{:else if isExempt && mounted}
+{:else if isExempt && mounted && !checking}
   {@render children()}
 {:else if serverChecked}
   {@render children()}
 {:else if hasVendor && vendorStatus && vendorStatus !== 'APPROVED'}
-  <!-- Cache tahu status → langsung tampil pesan tanpa flash -->
   <div class="container-x py-16">
     <div class="max-w-md mx-auto card text-center">
       {#if vendorStatus === 'PENDING'}
@@ -79,12 +84,11 @@
       {/if}
       <div class="flex gap-2 justify-center">
         <a href="/seller/pending" class="btn-primary btn-md">Lihat detail</a>
-        <a href="/seller/profile" class="btn-outline btn-md">Lengkapi profil</a>
       </div>
     </div>
   </div>
 {:else}
   <div class="container-x py-16">
-    <div class="card text-center text-ink-500">{mounted ? 'Memuat…' : 'Memuat…'}</div>
+    <div class="card text-center text-ink-500">{mounted ? 'Memuat...' : 'Memuat...'}</div>
   </div>
 {/if}

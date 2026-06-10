@@ -1,33 +1,57 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import Icon from '$lib/components/Icon.svelte';
   import { apiEndpoints, getToken } from '$lib/api';
+  import { auth } from '$lib/stores.svelte';
   import { goto } from '$app/navigation';
 
   let vendor = $state<any>(null);
   let loading = $state(true);
+  let pollTimer: ReturnType<typeof setInterval> | null = null;
 
-  onMount(async () => {
-    if (!getToken()) { goto('/login?next=/seller/pending'); return; }
+  async function syncVendorStatus() {
+    if (!getToken()) {
+      goto('/login?next=/seller/pending');
+      return;
+    }
+
     try {
       const data: any = await apiEndpoints.sellerDashboard();
       vendor = data.vendor;
+      auth.set({
+        ...auth.user,
+        vendor_id: data.vendor.id,
+        vendor_status: data.vendor.verification_status,
+        vendor_username: data.vendor.username,
+        vendor_tour_done: data.vendor.tour_completed_at !== null
+      });
+
       if (vendor.verification_status === 'APPROVED') {
         goto('/seller/dashboard');
-        return;
       }
     } catch (e: any) {
-      if (e.status === 404) { goto('/seller/register'); return; }
-    } finally { loading = false; }
+      if (e.status === 404) goto('/seller/register');
+    } finally {
+      loading = false;
+    }
+  }
+
+  onMount(() => {
+    syncVendorStatus();
+    pollTimer = setInterval(syncVendorStatus, 8000);
+  });
+
+  onDestroy(() => {
+    if (pollTimer) clearInterval(pollTimer);
   });
 </script>
 
-<svelte:head><title>Menunggu Verifikasi — Seller</title></svelte:head>
+<svelte:head><title>Menunggu Verifikasi - Seller</title></svelte:head>
 
 <div class="container-x py-10 sm:py-16">
   <div class="max-w-xl mx-auto">
     {#if loading}
-      <div class="card text-center text-ink-500 py-12">Memuat…</div>
+      <div class="card text-center text-ink-500 py-12">Memuat...</div>
     {:else if vendor}
       <div class="card text-center">
         {#if vendor.verification_status === 'PENDING'}
@@ -37,7 +61,7 @@
           <h1 class="font-display text-2xl font-bold tracking-tightest mb-2">Menunggu Verifikasi</h1>
           <p class="text-sm text-ink-500 mb-6">
             Toko <span class="font-semibold text-ink-900">{vendor.name}</span> sedang dalam proses verifikasi admin.
-            Kami akan memeriksa data dan KTP yang Anda kirim. Mohon menunggu, biasanya 1–2 hari kerja.
+            Kami akan memeriksa data dan KTP yang Anda kirim. Halaman ini akan otomatis masuk ke dashboard setelah disetujui.
           </p>
         {:else if vendor.verification_status === 'REJECTED'}
           <div class="w-16 h-16 rounded-full bg-red-100 grid place-items-center mx-auto mb-4">
@@ -53,17 +77,16 @@
           <p class="text-sm text-ink-500 mb-6">Silakan perbarui profil toko Anda lalu hubungi admin untuk pengajuan ulang.</p>
         {/if}
 
-        <div class="grid sm:grid-cols-2 gap-3 max-w-md mx-auto">
-          <a href="/seller/profile" class="btn-outline btn-md">Lengkapi Profil</a>
+        <div class="max-w-md mx-auto">
           <a href="/" class="btn-primary btn-md">Kembali ke Beranda</a>
         </div>
 
         <div class="mt-8 pt-6 border-t border-ink-100 text-left text-sm">
-          <h3 class="font-semibold mb-3">Sambil menunggu, lengkapi:</h3>
+          <h3 class="font-semibold mb-3">Status akses seller:</h3>
           <ul class="space-y-2 text-ink-600">
-            <li class="flex items-start gap-2"><Icon name="check" size={14} class="mt-1 text-emerald-600" /> Data bank (BCA/Mandiri/BRI/dll) untuk pencairan dana</li>
-            <li class="flex items-start gap-2"><Icon name="check" size={14} class="mt-1 text-emerald-600" /> Alamat & pin lokasi toko</li>
-            <li class="flex items-start gap-2"><Icon name="check" size={14} class="mt-1 text-emerald-600" /> Deskripsi toko yang menarik</li>
+            <li class="flex items-start gap-2"><Icon name="lock" size={14} class="mt-1 text-amber-600" /> Dashboard seller belum dapat dibuka.</li>
+            <li class="flex items-start gap-2"><Icon name="lock" size={14} class="mt-1 text-amber-600" /> Produk, pesanan, penarikan, dan profil toko terkunci sampai admin menyetujui verifikasi.</li>
+            <li class="flex items-start gap-2"><Icon name="refresh-cw" size={14} class="mt-1 text-ink-500" /> Halaman ini mengecek status otomatis setiap beberapa detik.</li>
           </ul>
         </div>
       </div>
