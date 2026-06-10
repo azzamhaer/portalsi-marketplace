@@ -7,6 +7,7 @@
   import { goto } from '$app/navigation';
   import ProductGrid from '$lib/components/ProductGrid.svelte';
   import VendorBadge from '$lib/components/VendorBadge.svelte';
+  import ReportButton from '$lib/components/ReportButton.svelte';
 
   let { data } = $props();
   const p = $derived(data.product);
@@ -14,6 +15,7 @@
   const disc = $derived(calcDiscount(p.price, p.original_price));
   let qty = $state(1);
   const inWishlist = $derived(wishlist.has(p.id));
+  const isAdmin = $derived(auth.user?.role === 'ADMIN');
 
   // Gallery state
   const images = $derived.by(() => {
@@ -222,33 +224,47 @@
 
       <!-- Action buttons -->
       <!-- Mobile: cart=icon, beli=text; Desktop: keduanya pakai text + icon -->
+      {#if auth.user?.role === 'ADMIN'}
+        <div class="bg-amber-50 text-amber-800 text-xs p-3 rounded-xl flex items-center gap-2">
+          <Icon name="shield-alert" size={14} /> Anda login sebagai admin. Fitur belanja & chat dinonaktifkan.
+        </div>
+      {/if}
+
       <div class="flex gap-2 sm:gap-3">
-        <!-- Tambah keranjang: icon-only di mobile, icon + text di desktop -->
-        <button on:click={addToCart}
-                class="rounded-full transition inline-flex items-center justify-center border border-ink-300 hover:bg-ink-50
-                       h-11 w-11 sm:h-auto sm:w-auto sm:px-5 sm:py-3 sm:gap-2 sm:flex-1 shrink-0"
+        <!-- Tambah keranjang -->
+        <button on:click={addToCart} disabled={isAdmin}
+                class="rounded-full transition inline-flex items-center justify-center border border-ink-300
+                       h-11 w-11 sm:h-auto sm:w-auto sm:px-5 sm:py-3 sm:gap-2 sm:flex-1 shrink-0
+                       {isAdmin ? 'opacity-40 cursor-not-allowed' : 'hover:bg-ink-50'}"
                 aria-label="Tambah ke keranjang">
           <Icon name="shopping-bag" size={18} />
           <span class="hidden sm:inline text-sm font-medium">Keranjang</span>
         </button>
-        <!-- Beli sekarang: full width di mobile dengan teks pas -->
-        <button on:click={buyNow}
-                class="btn-primary rounded-full inline-flex items-center justify-center gap-2 h-11 sm:h-auto sm:py-3 flex-1 text-sm font-medium px-4">
+        <!-- Beli sekarang -->
+        <button on:click={buyNow} disabled={isAdmin}
+                class="btn-primary rounded-full inline-flex items-center justify-center gap-2 h-11 sm:h-auto sm:py-3 flex-1 text-sm font-medium px-4
+                       {isAdmin ? 'opacity-40 cursor-not-allowed' : ''}">
           <Icon name="zap" size={16} />
           <span>Beli Sekarang</span>
         </button>
         <!-- Wishlist -->
-        <button on:click={toggleWish}
+        <button on:click={toggleWish} disabled={isAdmin}
                 class="rounded-full transition inline-flex items-center justify-center h-11 w-11 sm:h-12 sm:w-12 shrink-0
-                       {inWishlist ? 'bg-red-500 text-white hover:bg-red-600' : 'border border-ink-300 hover:bg-ink-50'}"
+                       {isAdmin ? 'opacity-40 cursor-not-allowed border border-ink-300' :
+                         (inWishlist ? 'bg-red-500 text-white hover:bg-red-600' : 'border border-ink-300 hover:bg-ink-50')}"
                 aria-label="Wishlist">
-          <Icon name="heart" size={18} fill={inWishlist ? 'currentColor' : 'none'} />
+          <Icon name="heart" size={18} fill={inWishlist && !isAdmin ? 'currentColor' : 'none'} />
         </button>
       </div>
 
-      <button on:click={chatVendor} class="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-full border border-ink-200 hover:bg-ink-50 text-sm font-medium transition">
-        <Icon name="message-circle" size={16} /> Tanyakan barang ini ke penjual
-      </button>
+      {#if auth.user?.role !== 'ADMIN'}
+        <button on:click={chatVendor} class="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-full border border-ink-200 hover:bg-ink-50 text-sm font-medium transition">
+          <Icon name="message-circle" size={16} /> Tanyakan barang ini ke penjual
+        </button>
+        <div class="flex justify-end">
+          <ReportButton targetType="PRODUCT" targetId={p.id} targetName={p.name} label="Laporkan produk ini" />
+        </div>
+      {/if}
 
       <div class="grid grid-cols-2 gap-3">
         <div class="flex items-start gap-2 p-3 rounded-xl bg-ink-50">

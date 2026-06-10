@@ -48,6 +48,9 @@ class ChatController extends Controller
         if ($vendor->user_id === $request->user()->id) {
             return response()->json(['message' => 'Tidak bisa chat ke toko sendiri'], 422);
         }
+        if (in_array($vendor->moderation_mode, ['LIMITED', 'DISABLED'])) {
+            return response()->json(['message' => 'Toko ini sedang tidak menerima pesan baru.'], 422);
+        }
         $thread = ChatThread::firstOrCreate(
             ['user_id' => $request->user()->id, 'vendor_id' => $vendor->id],
             ['product_id' => $data['product_id'] ?? null, 'last_message_at' => now()]

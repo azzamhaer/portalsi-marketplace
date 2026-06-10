@@ -57,7 +57,14 @@ class OrderController extends Controller
 
         return DB::transaction(function () use ($data, $method, $userId, $request) {
             $productIds = collect($data['items'])->pluck('product_id');
-            $products = Product::whereIn('id', $productIds)->where('is_active', true)->get()->keyBy('id');
+            $products = Product::whereIn('id', $productIds)->where('is_active', true)
+                ->with('vendor:id,name,moderation_mode')->get()->keyBy('id');
+            // Block kalau ada produk dari toko yang sedang dimoderasi
+            foreach ($products as $p) {
+                if ($p->vendor && in_array($p->vendor->moderation_mode, ['LIMITED', 'DISABLED'])) {
+                    abort(422, "Toko {$p->vendor->name} sedang tidak menerima pesanan.");
+                }
+            }
 
             $subtotal = 0;
             $itemsForTripay = [];
@@ -166,7 +173,30 @@ class OrderController extends Controller
 
     protected function sendOrderEmail($order, $user, string $event): void
     {
-        if (!$user || !$user->email) return;
+        if (!$user) return;
+        // In-app notification
+        $titleMap = [
+            'created'   => 'Pesanan dibuat',
+            'paid'      => 'Pembayaran berhasil',
+            'shipped'   => 'Pesanan dikirim',
+            'done'      => 'Pesanan selesai',
+            'cancelled' => 'Pesanan dibatalkan',
+        ];
+        $sevMap = [
+            'created' => 'INFO', 'paid' => 'SUCCESS', 'shipped' => 'INFO',
+            'done' => 'SUCCESS', 'cancelled' => 'WARNING',
+        ];
+        $msg = "Pesanan #{$order->order_number} status diperbarui.";
+        if ($order->tracking_no) $msg .= " Resi: {$order->tracking_no}.";
+        \App\Models\UserNotification::send(
+            $user->id, 'ORDER_' . strtoupper($event),
+            $titleMap[$event] ?? 'Update pesanan',
+            $msg,
+            '/orders/' . $order->id,
+            $sevMap[$event] ?? 'INFO',
+            ['order_id' => $order->id, 'order_number' => $order->order_number]
+        );
+        if (!$user->email) return;
         $brevo = new \App\Services\BrevoService();
         $appName = \App\Models\Setting::get('app_name', 'MPSI');
         $frontUrl = rtrim(config('services.frontend_url', 'http://localhost:5173'), '/');

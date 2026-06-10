@@ -71,9 +71,12 @@
             <td class="py-2 font-semibold">{fmtRp(o.total)}</td>
             <td class="py-2"><span class="pill {statusPill(o.status)}">{ORDER_STATUS_LABEL[o.status]}</span></td>
             <td class="py-2">
-              <select on:change={(e: any) => changeStatus(o, e.target.value)} value={o.status} class="text-xs border border-ink-200 rounded px-2 py-1">
-                {#each Object.entries(ORDER_STATUS_LABEL) as [k, v]}<option value={k}>{v}</option>{/each}
-              </select>
+              <div class="flex items-center gap-2">
+                <select on:change={(e: any) => changeStatus(o, e.target.value)} value={o.status} class="text-xs border border-ink-200 rounded px-2 py-1">
+                  {#each Object.entries(ORDER_STATUS_LABEL) as [k, v]}<option value={k}>{v}</option>{/each}
+                </select>
+                <a href={`/admin/orders/${o.id}`} class="text-xs px-2.5 py-1 rounded-full bg-ink-100 hover:bg-ink-200 inline-flex items-center gap-1"><Icon name="eye" size={12} /> Detail</a>
+              </div>
             </td>
           </tr>
         {/each}

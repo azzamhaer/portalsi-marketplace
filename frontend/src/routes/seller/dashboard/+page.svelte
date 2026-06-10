@@ -2,6 +2,8 @@
   import { onMount } from 'svelte';
   import SellerSidebar from '$lib/components/SellerSidebar.svelte';
   import VendorBadge from '$lib/components/VendorBadge.svelte';
+  import VendorWarningPopup from '$lib/components/VendorWarningPopup.svelte';
+  import SellerTour from '$lib/components/SellerTour.svelte';
   import { fmtRp, statusPill, ORDER_STATUS_LABEL } from '$lib/utils';
   import { apiEndpoints } from '$lib/api';
   import { goto } from '$app/navigation';
@@ -9,14 +11,37 @@
 
   let data = $state<any>(null);
   let loading = $state(true);
+  let showTour = $state(false);
 
   onMount(async () => {
     if (!auth.user) { goto('/login?next=/seller/dashboard'); return; }
-    try { data = await apiEndpoints.sellerDashboard(); }
+    try {
+      data = await apiEndpoints.sellerDashboard();
+      // Tour kalau toko APPROVED tapi tour_completed_at masih null
+      if (data?.vendor?.verification_status === 'APPROVED' && !data.vendor.tour_completed_at) {
+        // Beri waktu DOM render dulu
+        setTimeout(() => { showTour = true; }, 600);
+      }
+    }
     catch (e: any) { if (e.status === 404) goto('/seller/register'); }
     loading = false;
   });
+
+  function dismissWarning() {
+    if (data?.vendor) data.vendor.warning_dismissed_at = new Date().toISOString();
+  }
+  function finishTour() {
+    showTour = false;
+    if (data?.vendor) data.vendor.tour_completed_at = new Date().toISOString();
+  }
 </script>
+
+{#if data?.vendor}
+  <VendorWarningPopup vendor={data.vendor} onClose={dismissWarning} />
+{/if}
+{#if showTour}
+  <SellerTour onFinish={finishTour} />
+{/if}
 
 <svelte:head><title>Seller Dashboard — MPSI</title></svelte:head>
 

@@ -7,7 +7,9 @@ use App\Http\Controllers\Api\CatalogController;
 use App\Http\Controllers\Api\ChatController;
 use App\Http\Controllers\Api\FollowController;
 use App\Http\Controllers\Api\FaqController;
+use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\OrderController;
+use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\PaymentMethodController;
 use App\Http\Controllers\Api\ReviewController;
 use App\Http\Controllers\Api\SellerController;
@@ -31,6 +33,7 @@ Route::get('/vendors/{id}',             [CatalogController::class, 'vendor']);
 Route::get('/payment-methods',          [OrderController::class,   'paymentMethods']);
 Route::get('/shipping-options',         [OrderController::class,   'shippingOptions']);
 Route::get('/faqs',                     [FaqController::class, 'index']);
+Route::get('/reports/categories',       [ReportController::class, 'categories']);
 
 Route::post('/auth/register',           [AuthController::class, 'register']);
 Route::post('/auth/login',              [AuthController::class, 'login']);
@@ -81,6 +84,16 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/seller/dashboard',         [SellerController::class, 'dashboard']);
     Route::put('/seller/profile',           [SellerController::class, 'updateProfile']);
     Route::post('/seller/username',         [SellerController::class, 'updateUsername']);
+    Route::post('/seller/dismiss-warning',   [SellerController::class, 'dismissWarning']);
+    Route::post('/seller/finish-tour',        [SellerController::class, 'finishTour']);
+
+    /* Reports & Notifications */
+    Route::post('/reports',                  [ReportController::class, 'store']);
+    Route::get('/notifications',             [NotificationController::class, 'index']);
+    Route::get('/notifications/unread-count',[NotificationController::class, 'unreadCount']);
+    Route::post('/notifications/{id}/read',  [NotificationController::class, 'markRead']);
+    Route::post('/notifications/read-all',   [NotificationController::class, 'markAllRead']);
+    Route::delete('/notifications/{id}',     [NotificationController::class, 'destroy']);
     Route::get('/seller/products',          [SellerController::class, 'products']);
     Route::post('/seller/products',         [SellerController::class, 'storeProduct']);
     Route::put('/seller/products/{id}',     [SellerController::class, 'updateProduct']);
@@ -107,6 +120,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/vendors',                [AdminController::class, 'vendors']);
         Route::post('/vendors/{id}/verify',   [AdminController::class, 'verifyVendor']);
         Route::post('/vendors/{id}/badge',    [AdminController::class, 'setBadge']);
+        Route::post('/vendors/{id}/moderation', [AdminController::class, 'setModeration']);
         Route::delete('/vendors/{id}',        [AdminController::class, 'deleteVendor']);
 
         Route::get('/withdrawals',            [WithdrawalController::class, 'adminList']);
@@ -117,7 +131,12 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::get('/payment-methods',        [PaymentMethodController::class, 'adminList']);
         Route::put('/payment-methods',        [PaymentMethodController::class, 'adminSave']);
+
+        Route::get('/reports',                [ReportController::class, 'adminGroupedList']);
+        Route::post('/reports/{id}',          [ReportController::class, 'adminResolve']);
+
         Route::get('/orders',                 [AdminController::class, 'orders']);
+        Route::get('/orders/{id}',            [AdminController::class, 'orderDetail']);
         Route::put('/orders/{id}',            [AdminController::class, 'updateOrder']);
         Route::get('/returns',                [AdminController::class, 'returns']);
         Route::post('/returns/{id}',          [AdminController::class, 'approveReturn']);

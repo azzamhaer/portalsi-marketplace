@@ -45,7 +45,8 @@ class CatalogController extends Controller
     public function products(Request $request)
     {
         $q = Product::query()->where('is_active', true)
-            ->with(['vendor:id,name,slug,city,is_official', 'tagModels:id,slug'])
+            ->whereHas('vendor', fn($v) => $v->where('moderation_mode', '!=', 'DISABLED')->where('verification_status', 'APPROVED'))
+            ->with(['vendor:id,name,slug,username,city,is_official,moderation_mode', 'tagModels:id,slug'])
             ->withCount('reviews');
 
         if ($cat = $request->query('category')) {
@@ -112,8 +113,8 @@ class CatalogController extends Controller
             'sold'   => $q->orderByDesc('total_sold'),
             default  => $q->orderByDesc('is_official')->orderByDesc('total_sold'),
         };
-        // Hanya tampilkan vendor APPROVED ke publik
-        $q->where('verification_status', 'APPROVED');
+        // Hanya tampilkan vendor APPROVED & tidak DISABLED ke publik
+        $q->where('verification_status', 'APPROVED')->where('moderation_mode', '!=', 'DISABLED');
         return response()->json($q->get());
     }
 
@@ -126,11 +127,11 @@ class CatalogController extends Controller
 
         if (!$vendor) abort(404, 'Toko tidak ditemukan');
 
-        // Block halaman publik kalau vendor belum APPROVED — kecuali admin atau pemilik toko
+        // Block halaman publik kalau vendor belum APPROVED atau DISABLED total — kecuali admin atau pemilik toko
         $viewer = auth('sanctum')->user();
         $isOwner = $viewer && $viewer->id === $vendor->user_id;
         $isAdmin = $viewer && $viewer->role === 'ADMIN';
-        if ($vendor->verification_status !== 'APPROVED' && !$isOwner && !$isAdmin) {
+        if (($vendor->verification_status !== 'APPROVED' || $vendor->moderation_mode === 'DISABLED') && !$isOwner && !$isAdmin) {
             abort(404, 'Toko tidak ditemukan');
         }
 

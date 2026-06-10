@@ -27,6 +27,11 @@ class SettingsController extends Controller
             'heroImage'     => Setting::get('hero_image', ''),
             'paymentIntro'  => Setting::get('payment_intro', ''),
             'helpIntro'     => Setting::get('help_intro', ''),
+            'footerColumns' => json_decode(Setting::get('footer_columns', '[]'), true) ?: [],
+            'footerBottom'  => Setting::get('footer_bottom', ''),
+            'footerContact' => Setting::get('footer_contact', ''),
+            'footerDesc'    => Setting::get('footer_desc', ''),
+            'hiddenPages'   => json_decode(Setting::get('hidden_pages', '[]'), true) ?: [],
         ]);
     }
 
@@ -58,6 +63,11 @@ class SettingsController extends Controller
             'hero_image'    => Setting::get('hero_image', ''),
             'payment_intro' => Setting::get('payment_intro', ''),
             'help_intro'    => Setting::get('help_intro', ''),
+            'footer_columns'=> json_decode(Setting::get('footer_columns', '[]'), true) ?: [],
+            'footer_bottom' => Setting::get('footer_bottom', ''),
+            'footer_contact'=> Setting::get('footer_contact', ''),
+            'footer_desc'   => Setting::get('footer_desc', ''),
+            'hidden_pages'  => json_decode(Setting::get('hidden_pages', '[]'), true) ?: [],
             'palettes' => self::PALETTES,
         ]);
     }
@@ -95,7 +105,20 @@ class SettingsController extends Controller
             'hero_image'    => 'sometimes|nullable|string',
             'payment_intro' => 'sometimes|nullable|string|max:5000',
             'help_intro'    => 'sometimes|nullable|string|max:5000',
+            'footer_columns'=> 'sometimes|nullable|array',
+            'footer_columns.*.title' => 'required|string|max:50',
+            'footer_columns.*.links' => 'required|array',
+            'footer_columns.*.links.*.label' => 'required|string|max:50',
+            'footer_columns.*.links.*.href'  => 'required|string|max:200',
+            'footer_bottom' => 'sometimes|nullable|string|max:300',
+            'footer_contact'=> 'sometimes|nullable|string|max:200',
+            'footer_desc'   => 'sometimes|nullable|string|max:500',
+            'hidden_pages'  => 'sometimes|nullable|array',
+            'hidden_pages.*'=> 'string|in:payment-info,help,about,vendors',
         ]);
+        // Convert arrays to JSON for storage
+        if (isset($data['footer_columns']))  $data['footer_columns']  = json_encode($data['footer_columns']);
+        if (isset($data['hidden_pages']))    $data['hidden_pages']    = json_encode($data['hidden_pages']);
 
         // Apply preset palette if provided
         if (!empty($data['palette'])) {

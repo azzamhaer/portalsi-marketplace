@@ -3,6 +3,7 @@
   import ProductGrid from '$lib/components/ProductGrid.svelte';
   import VendorBadge from '$lib/components/VendorBadge.svelte';
   import FollowButton from '$lib/components/FollowButton.svelte';
+  import ReportButton from '$lib/components/ReportButton.svelte';
   let { data } = $props();
   let v = $state(data.vendor);
   let isFollowing = $state(!!data.is_following);
@@ -45,7 +46,10 @@
       <div><div class="font-display text-xl font-bold tracking-tightest">{(v.total_sold ?? 0).toLocaleString('id-ID')}</div><div class="text-xs text-ink-500">Penjualan</div></div>
       <div><div class="font-display text-xl font-bold tracking-tightest">{(v.followers ?? 0).toLocaleString('id-ID')}</div><div class="text-xs text-ink-500">Pengikut</div></div>
     </div>
-    <FollowButton vendorId={v.id} initialFollowing={isFollowing} initialCount={v.followers ?? 0} onChange={onFollowChange} />
+    <div class="flex flex-col gap-2 items-end">
+      <FollowButton vendorId={v.id} initialFollowing={isFollowing} initialCount={v.followers ?? 0} onChange={onFollowChange} />
+      <ReportButton targetType="VENDOR" targetId={v.id} targetName={v.name} label="Laporkan toko" />
+    </div>
   </div>
 
   <h2 class="section-title mb-6">Semua produk</h2>

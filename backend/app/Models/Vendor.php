@@ -17,7 +17,9 @@ class Vendor extends Model
         'city', 'latitude', 'longitude', 'full_address',
         'description', 'avatar', 'banner', 'ktp_image', 'verification_status', 'verification_note',
         'bank_name', 'bank_account', 'bank_holder',
-        'rating', 'total_sold', 'followers', 'is_official', 'badge'
+        'rating', 'total_sold', 'followers', 'is_official', 'badge',
+        'moderation_mode', 'admin_warning', 'warning_dismissed_at',
+        'tour_completed_at', 'is_banned', 'ban_reason'
     ];
 
     protected $casts = [
@@ -26,6 +28,8 @@ class Vendor extends Model
         'latitude'            => 'float',
         'longitude'           => 'float',
         'username_changed_at' => 'datetime',
+        'tour_completed_at'   => 'datetime',
+        'is_banned'           => 'boolean',
     ];
 
     protected $hidden = ['ktp_image']; // jangan expose KTP di public response

@@ -113,12 +113,22 @@ class WithdrawalController extends Controller
             'status' => 'required|in:APPROVED,REJECTED,PAID',
             'admin_note' => 'nullable|string',
         ]);
-        $w = Withdrawal::findOrFail($id);
+        $w = Withdrawal::with('vendor.user')->findOrFail($id);
         $w->update([
             'status'       => $data['status'],
             'admin_note'   => $data['admin_note'] ?? null,
             'processed_at' => now(),
         ]);
+        if ($w->vendor?->user_id) {
+            $sev = match($data['status']) { 'PAID' => 'SUCCESS', 'REJECTED' => 'DANGER', default => 'INFO' };
+            \App\Models\UserNotification::send(
+                $w->vendor->user_id, 'WITHDRAW_' . $data['status'],
+                "Penarikan Rp " . number_format($w->amount, 0, ',', '.') . " — {$data['status']}",
+                "Permintaan penarikan Anda sebesar Rp " . number_format($w->amount, 0, ',', '.') . " telah diubah ke status {$data['status']}." . ($data['admin_note'] ? "\nCatatan: " . $data['admin_note'] : ''),
+                '/seller/withdraw', $sev,
+                ['withdrawal_id' => $w->id]
+            );
+        }
         return response()->json($w);
     }
 }

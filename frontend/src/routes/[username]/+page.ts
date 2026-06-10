@@ -25,7 +25,7 @@ const RESERVED = new Set<string>([
   'favicon.ico', 'robots.txt', 'sitemap.xml',
   'null', 'undefined', 'true', 'false',
   'forgot-password', 'reset-password', 'verify-email', 'confirm-email',
-  'appearance',
+  'appearance', 'notifications',
 ]);
 
 export const load: PageLoad = async ({ params, fetch }) => {

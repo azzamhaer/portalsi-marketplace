@@ -54,6 +54,22 @@
       load();
     } catch (e: any) { toast.error(e.message); }
   }
+  let modVendor = $state<any>(null);
+  let modMode = $state<'NONE'|'LIMITED'|'DISABLED'>('NONE');
+  let modWarning = $state('');
+  function openModerationModal(v: any) {
+    modVendor = v;
+    modMode = (v.moderation_mode ?? 'NONE') as any;
+    modWarning = v.admin_warning ?? '';
+  }
+  async function saveModeration() {
+    try {
+      await apiEndpoints.adminSetVendorModeration(modVendor.id, modMode, modWarning.trim() || undefined);
+      toast.success('Moderasi diperbarui');
+      modVendor = null;
+      load();
+    } catch (e: any) { toast.error(e.message); }
+  }
 </script>
 
 <div class="card flex items-center gap-3 mb-4 flex-wrap">
@@ -110,10 +126,21 @@
           </div>
         {/if}
 
+        {#if v.moderation_mode && v.moderation_mode !== 'NONE'}
+          <div class="mt-2 text-xs flex items-center gap-1.5 flex-wrap">
+            <span class="pill-{v.moderation_mode === 'DISABLED' ? 'red' : 'amber'}">
+              <Icon name="shield-alert" size={10} /> {v.moderation_mode === 'DISABLED' ? 'Tersembunyi total' : 'Toko dibatasi'}
+            </span>
+          </div>
+        {/if}
+
         <div class="flex gap-2 mt-3 flex-wrap">
           <button on:click={() => active = v} class="btn-outline btn-sm"><Icon name="id-card" size={12} /> Lihat KTP</button>
           {#if v.verification_status !== 'APPROVED'}<button on:click={() => verify(v, 'APPROVED')} class="btn-primary btn-sm"><Icon name="check" size={12} /> Approve</button>{/if}
           {#if v.verification_status !== 'REJECTED'}<button on:click={() => verify(v, 'REJECTED')} class="btn-sm btn bg-amber-100 text-amber-800 hover:bg-amber-200"><Icon name="x" size={12} /> Tolak</button>{/if}
+          {#if v.verification_status === 'APPROVED'}
+            <button on:click={() => openModerationModal(v)} class="btn-sm btn bg-purple-50 text-purple-700 hover:bg-purple-100"><Icon name="shield-alert" size={12} /> Moderasi</button>
+          {/if}
           <button on:click={() => del(v)} class="btn-sm btn bg-red-50 text-red-700 hover:bg-red-100"><Icon name="trash-2" size={12} /></button>
         </div>
       </div>
@@ -149,6 +176,54 @@
       <div class="flex gap-2 mt-5">
         <button on:click={() => verify(active, 'APPROVED')} class="btn-primary btn-md flex-1"><Icon name="check" size={14} /> Approve</button>
         <button on:click={() => verify(active, 'REJECTED')} class="btn-outline btn-md flex-1"><Icon name="x" size={14} /> Tolak</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if modVendor}
+  <div class="fixed inset-0 z-50 bg-black/60 grid place-items-center p-4 animate-fadeIn" on:click={() => modVendor = null} role="dialog">
+    <div class="bg-white rounded-2xl p-6 max-w-md w-full" on:click|stopPropagation>
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="font-semibold">Moderasi Toko — {modVendor.name}</h3>
+        <button on:click={() => modVendor = null} class="w-8 h-8 grid place-items-center rounded-full hover:bg-ink-100"><Icon name="x" size={16} /></button>
+      </div>
+      <div class="space-y-3">
+        <div>
+          <label class="label">Mode Moderasi</label>
+          <div class="grid gap-2">
+            <label class="flex items-start gap-2 p-3 rounded-xl border border-ink-200 cursor-pointer" class:bg-ink-50={modMode === 'NONE'}>
+              <input type="radio" bind:group={modMode} value="NONE" class="mt-1" />
+              <div>
+                <div class="font-semibold text-sm">Normal</div>
+                <div class="text-xs text-ink-500">Toko aktif tanpa pembatasan.</div>
+              </div>
+            </label>
+            <label class="flex items-start gap-2 p-3 rounded-xl border border-amber-200 cursor-pointer" class:bg-amber-50={modMode === 'LIMITED'}>
+              <input type="radio" bind:group={modMode} value="LIMITED" class="mt-1" />
+              <div>
+                <div class="font-semibold text-sm text-amber-700">Dibatasi (penalti ringan)</div>
+                <div class="text-xs text-ink-500">Toko & produk masih bisa dilihat, tapi tidak bisa dipesan & chat ditolak. Penjelasan pelanggaran tampil sebagai badge.</div>
+              </div>
+            </label>
+            <label class="flex items-start gap-2 p-3 rounded-xl border border-red-200 cursor-pointer" class:bg-red-50={modMode === 'DISABLED'}>
+              <input type="radio" bind:group={modMode} value="DISABLED" class="mt-1" />
+              <div>
+                <div class="font-semibold text-sm text-red-700">Tersembunyi total (penalti berat)</div>
+                <div class="text-xs text-ink-500">Toko & produk tidak tampil di listing, search, atau detail page. Vendor tetap bisa login & lihat dashboardnya.</div>
+              </div>
+            </label>
+          </div>
+        </div>
+        <div>
+          <label class="label">Pesan peringatan untuk vendor</label>
+          <textarea bind:value={modWarning} class="input" rows={4} placeholder="Contoh: Toko Anda terdeteksi menjual produk yang melanggar kebijakan kategori X. Mohon segera periksa dan revisi listing Anda dalam 3×24 jam..."></textarea>
+          <p class="helper">Pesan ini akan tampil sebagai popup di dashboard vendor saat login. Kosongkan untuk hapus peringatan.</p>
+        </div>
+        <div class="flex gap-2 pt-2">
+          <button on:click={() => modVendor = null} class="btn-outline btn-md flex-1">Batal</button>
+          <button on:click={saveModeration} class="btn-primary btn-md flex-1">Simpan</button>
+        </div>
       </div>
     </div>
   </div>

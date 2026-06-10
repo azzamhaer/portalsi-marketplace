@@ -19,6 +19,19 @@
   // Apply server-loaded settings IMMEDIATELY (no flash)
   if (data?.settings) settings.setAll(data.settings);
 
+  // Generate fallback favicon dari nama + palette (SVG data URI)
+  function makeFallbackFavicon(name: string, bg: string, fg: string): string {
+    const letter = (name?.[0] ?? 'M').toUpperCase();
+    const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'>
+      <rect width='100' height='100' rx='22' fill='${bg}'/>
+      <text x='50' y='72' text-anchor='middle' font-size='62' font-weight='800' fill='${fg}' font-family='Inter,sans-serif'>${letter}</text>
+    </svg>`;
+    return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+  }
+  const faviconHref = $derived(
+    settings.logo || makeFallbackFavicon(settings.appName, settings.primary || '#0a0a0a', settings.primaryFg || '#ffffff')
+  );
+
   onMount(async () => {
     applyPalette({ primary: settings.primary, primaryFg: settings.primaryFg, accent: settings.accent });
     // Re-fetch settings client-side untuk sinkronisasi terbaru (background)
@@ -48,11 +61,9 @@
 
 <svelte:head>
   <title>{settings.appName ?? 'MPSI'}</title>
-  {#if settings.logo}
-    <link rel="icon" href={settings.logo} />
-  {:else}
-    <link rel="icon" href="/favicon.svg" />
-  {/if}
+  <link rel="icon" type="image/svg+xml" href={faviconHref} />
+  <link rel="apple-touch-icon" href={faviconHref} />
+  <meta name="theme-color" content={settings.primary || '#0a0a0a'} />
   <style>
     :root {
       --app-primary: {settings.primary || '#0a0a0a'};

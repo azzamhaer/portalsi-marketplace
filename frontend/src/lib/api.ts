@@ -110,6 +110,22 @@ export const apiEndpoints = {
   sellerShipOrder:  (id: number) => api(`/seller/orders/${id}/ship`, { method: 'POST' }),
   sellerUpdateProfile:(b: any) => api('/seller/profile', { method: 'PUT', body: b }),
   sellerUpdateUsername:(username: string) => api('/seller/username', { method: 'POST', body: { username } as any }),
+  sellerDismissWarning:() => api('/seller/dismiss-warning', { method: 'POST' }),
+  sellerFinishTour:    () => api('/seller/finish-tour', { method: 'POST' }),
+
+  /* reports */
+  reportCategories: () => api('/reports/categories'),
+  submitReport: (b: { target_type: 'PRODUCT'|'VENDOR'; target_id: number; category: string; description: string; attachments?: string[] }) =>
+    api('/reports', { method: 'POST', body: b as any }),
+  adminReports: (q='') => api('/admin/reports' + (q ? '?'+q : '')),
+  adminResolveReport: (id: number, b: any) => api(`/admin/reports/${id}`, { method: 'POST', body: b }),
+
+  /* notifications */
+  notifications: (q='') => api('/notifications' + (q ? '?'+q : '')),
+  notificationsUnreadCount: () => api('/notifications/unread-count'),
+  notificationMarkRead: (id: number) => api(`/notifications/${id}/read`, { method: 'POST' }),
+  notificationsReadAll: () => api('/notifications/read-all', { method: 'POST' }),
+  notificationDelete: (id: number) => api(`/notifications/${id}`, { method: 'DELETE' }),
 
   /* reviews */
   canReviewProduct: (productId: number) => api(`/products/${productId}/can-review`),
@@ -141,6 +157,8 @@ export const apiEndpoints = {
   adminVendors:      (q='') => api('/admin/vendors' + (q ? '?'+q : '')),
   adminVerifyVendor: (id: number, status: 'APPROVED'|'REJECTED', note?: string) => api(`/admin/vendors/${id}/verify`, { method: 'POST', body: { status, note } as any }),
   adminSetVendorBadge: (id: number, badge: string | null) => api(`/admin/vendors/${id}/badge`, { method: 'POST', body: { badge } as any }),
+  adminSetVendorModeration: (id: number, mode: string, admin_warning?: string) =>
+    api(`/admin/vendors/${id}/moderation`, { method: 'POST', body: { moderation_mode: mode, admin_warning } as any }),
   adminDeleteVendor: (id: number) => api(`/admin/vendors/${id}`, { method: 'DELETE' }),
   adminWithdrawals:  (q='') => api('/admin/withdrawals' + (q ? '?'+q : '')),
   adminProcessWithdraw: (id: number, status: string, admin_note?: string) => api(`/admin/withdrawals/${id}`, { method: 'POST', body: { status, admin_note } as any }),
@@ -149,6 +167,7 @@ export const apiEndpoints = {
   adminPaymentMethods: () => api('/admin/payment-methods'),
   adminSavePaymentMethods: (items: any[]) => api('/admin/payment-methods', { method: 'PUT', body: { items } as any }),
   adminOrders:       (q='') => api('/admin/orders' + (q ? '?'+q : '')),
+  adminOrder:        (id: number) => api(`/admin/orders/${id}`),
   adminUpdateOrder:  (id: number, b: any) => api(`/admin/orders/${id}`, { method: 'PUT', body: b }),
   adminReturns:      () => api('/admin/returns'),
   adminApproveReturn:(id: number, status: string) => api(`/admin/returns/${id}`, { method: 'POST', body: { status } as any }),

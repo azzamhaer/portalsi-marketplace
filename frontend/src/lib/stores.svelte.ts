@@ -122,6 +122,11 @@ function createSettingsStore() {
     heroImage: '',
     paymentIntro: '',
     helpIntro: '',
+    footerColumns: [] as any[],
+    footerBottom: '',
+    footerContact: '',
+    footerDesc: '',
+    hiddenPages: [] as string[],
   };
   let s = $state<any>({ ...defaults });
   if (browser) {
@@ -143,6 +148,11 @@ function createSettingsStore() {
     get heroImage()    { return s.heroImage; },
     get paymentIntro() { return s.paymentIntro; },
     get helpIntro()    { return s.helpIntro; },
+    get footerColumns(){ return s.footerColumns ?? []; },
+    get footerBottom() { return s.footerBottom; },
+    get footerContact(){ return s.footerContact; },
+    get footerDesc()   { return s.footerDesc; },
+    get hiddenPages()  { return s.hiddenPages ?? []; },
     setAll(data: any) {
       s = { ...defaults, ...data };
       if (browser) {

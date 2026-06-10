@@ -9,7 +9,7 @@
   let saving = $state(false);
   let logoFile = $state<File | null>(null);
   let heroFile = $state<File | null>(null);
-  let tab = $state<'branding' | 'home' | 'payment' | 'faq' | 'pages'>('branding');
+  let tab = $state<'branding' | 'home' | 'payment' | 'faq' | 'pages' | 'footer' | 'visibility'>('branding');
 
   onMount(async () => {
     const data: any = await apiEndpoints.adminSettings();
@@ -25,6 +25,11 @@
         hero_title: s.hero_title, hero_subtitle: s.hero_subtitle,
         hero_cta_label: s.hero_cta_label, hero_cta_href: s.hero_cta_href,
         payment_intro: s.payment_intro, help_intro: s.help_intro,
+        footer_columns: s.footer_columns ?? [],
+        footer_desc: s.footer_desc,
+        footer_contact: s.footer_contact,
+        footer_bottom: s.footer_bottom,
+        hidden_pages: s.hidden_pages ?? [],
       });
       const pub: any = await apiEndpoints.publicSettings();
       settingsStore.setAll(pub);
@@ -119,7 +124,7 @@
 {#if !s}<div class="card text-center text-ink-500 py-10">Memuat…</div>
 {:else}
   <div class="card !p-2 mb-5 flex gap-1 flex-wrap text-xs">
-    {#each [['branding','Branding & Palette'],['home','Beranda (Hero)'],['payment','Pembayaran'],['faq','FAQ'],['pages','Intro Halaman']] as [k, l]}
+    {#each [['branding','Branding & Palette'],['home','Beranda (Hero)'],['payment','Pembayaran'],['faq','FAQ'],['pages','Intro Halaman'],['footer','Footer'],['visibility','Visibilitas Halaman']] as [k, l]}
       <button on:click={() => tab = k as any} class="px-3 py-2 rounded-lg transition" class:bg-app-primary={tab === k} class:text-app-pfg={tab === k} class:hover:bg-ink-50={tab !== k}>{l}</button>
     {/each}
   </div>
@@ -315,6 +320,73 @@
           </div>
         {/each}
       {/if}
+    </div>
+  {:else if tab === 'footer'}
+    <div class="space-y-5">
+      <div class="card">
+        <h3 class="font-semibold mb-4">Konten Footer</h3>
+        <div class="grid sm:grid-cols-2 gap-3">
+          <div class="sm:col-span-2"><label class="label">Deskripsi aplikasi</label><textarea bind:value={s.footer_desc} class="input" rows={3} placeholder="Marketplace multivendor terdepan di Indonesia…"></textarea></div>
+          <div><label class="label">Kontak</label><input bind:value={s.footer_contact} class="input" placeholder="support@mpsi.id · 0800-1-MPSI" /></div>
+          <div><label class="label">Bottom (copyright)</label><input bind:value={s.footer_bottom} class="input" placeholder="© 2026 MPSI. Semua hak dilindungi." /></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+          <h3 class="font-semibold">Kolom Footer</h3>
+          <button type="button" on:click={() => s.footer_columns = [...(s.footer_columns ?? []), { title: 'Kolom Baru', links: [] }]} class="btn-outline btn-sm"><Icon name="plus" size={12} /> Tambah Kolom</button>
+        </div>
+        <p class="helper mb-3">Maks 3 kolom akan ditampilkan di footer. Kalau kosong, pakai default (Belanja, Pembayaran, Bantuan).</p>
+        {#if !s.footer_columns?.length}
+          <div class="bg-ink-50 p-3 rounded-xl text-xs text-ink-500">Belum ada kolom kustom. Footer akan pakai default.</div>
+        {:else}
+          {#each s.footer_columns as col, ci}
+            <div class="border border-ink-100 rounded-2xl p-3 mb-3">
+              <div class="flex items-center gap-2 mb-3">
+                <input bind:value={col.title} class="input flex-1 !py-2" placeholder="Judul kolom" />
+                <button type="button" on:click={() => s.footer_columns = s.footer_columns.filter((_: any, i: number) => i !== ci)} class="text-red-600 hover:bg-red-50 w-8 h-8 grid place-items-center rounded-full"><Icon name="trash-2" size={12} /></button>
+              </div>
+              <div class="space-y-2">
+                {#each (col.links ?? []) as link, li}
+                  <div class="flex gap-2">
+                    <input bind:value={link.label} class="input !py-2 !text-sm flex-1" placeholder="Label" />
+                    <input bind:value={link.href} class="input !py-2 !text-sm flex-1" placeholder="/path" />
+                    <button type="button" on:click={() => col.links = col.links.filter((_: any, i: number) => i !== li)} class="text-red-600 hover:bg-red-50 w-8 h-8 grid place-items-center rounded-full shrink-0"><Icon name="x" size={12} /></button>
+                  </div>
+                {/each}
+                <button type="button" on:click={() => col.links = [...(col.links ?? []), { label: '', href: '' }]} class="text-xs text-ink-500 hover:text-ink-950 flex items-center gap-1"><Icon name="plus" size={11} /> Tambah link</button>
+              </div>
+            </div>
+          {/each}
+        {/if}
+      </div>
+      <div class="flex justify-end">
+        <button on:click={save} disabled={saving} class="btn-primary btn-md">{saving ? 'Menyimpan…' : 'Simpan'}</button>
+      </div>
+    </div>
+  {:else if tab === 'visibility'}
+    <div class="space-y-5">
+      <div class="card">
+        <h3 class="font-semibold mb-2">Visibilitas Halaman</h3>
+        <p class="text-xs text-ink-500 mb-4">Centang halaman yang ingin <b>disembunyikan</b> dari menu navigasi & link. Halaman akan tetap accessible via URL langsung — hanya tidak muncul di navbar/footer.</p>
+        {#each [['vendors','Halaman Toko (/vendors)'],['payment-info','Halaman Pembayaran (/payment-info)'],['help','Halaman Bantuan (/help)'],['about','Halaman Tentang (/about)']] as [key, label]}
+          <label class="flex items-center gap-3 p-3 border border-ink-100 rounded-xl mb-2 cursor-pointer hover:bg-ink-50">
+            <input
+              type="checkbox"
+              checked={s.hidden_pages?.includes(key)}
+              on:change={(e: any) => {
+                if (e.target.checked) s.hidden_pages = [...(s.hidden_pages ?? []), key];
+                else s.hidden_pages = (s.hidden_pages ?? []).filter((p: string) => p !== key);
+              }}
+            />
+            <span class="text-sm">{label}</span>
+          </label>
+        {/each}
+      </div>
+      <div class="flex justify-end">
+        <button on:click={save} disabled={saving} class="btn-primary btn-md">{saving ? 'Menyimpan…' : 'Simpan'}</button>
+      </div>
     </div>
   {/if}
 {/if}

@@ -1,5 +1,6 @@
 <script lang="ts">
   import Icon from '$lib/components/Icon.svelte';
+  import NotificationBell from '$lib/components/NotificationBell.svelte';
   import { goto } from '$app/navigation';
   import { auth, cart, settings } from '$lib/stores.svelte';
   import { setToken, apiEndpoints } from '$lib/api';
@@ -99,9 +100,9 @@
       <nav class="hidden lg:flex items-center gap-7 text-sm text-ink-700">
         <a href="/" class="hover:text-ink-950 transition-colors">Beranda</a>
         <a href="/products" class="hover:text-ink-950 transition-colors">Produk</a>
-        <a href="/vendors" class="hover:text-ink-950 transition-colors">Toko</a>
-        <a href="/payment-info" class="hover:text-ink-950 transition-colors">Pembayaran</a>
-        <a href="/help" class="hover:text-ink-950 transition-colors">Bantuan</a>
+        {#if !settings.hiddenPages.includes('vendors')}<a href="/vendors" class="hover:text-ink-950 transition-colors">Toko</a>{/if}
+        {#if !settings.hiddenPages.includes('payment-info')}<a href="/payment-info" class="hover:text-ink-950 transition-colors">Pembayaran</a>{/if}
+        {#if !settings.hiddenPages.includes('help')}<a href="/help" class="hover:text-ink-950 transition-colors">Bantuan</a>{/if}
       </nav>
 
       <div class="ml-auto hidden md:block relative" bind:this={searchBoxRef}>
@@ -169,6 +170,7 @@
             {/if}
           </a>
         {/if}
+        <NotificationBell />
         {#if auth.user}
           <div class="relative" bind:this={userMenuRef}>
             <button type="button" on:click|stopPropagation={() => userOpen = !userOpen} class="w-10 h-10 grid place-items-center rounded-full hover:bg-ink-100 transition-colors" aria-label="Akun" aria-expanded={userOpen}>

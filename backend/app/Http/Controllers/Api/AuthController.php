@@ -56,9 +56,16 @@ class AuthController extends Controller
         if (!$user || !Hash::check($data['password'], $user->password)) {
             return response()->json(['message' => 'Email atau password salah'], 401);
         }
+        $user->load('vendor');
+        // Block login kalau vendor permanently banned
+        if ($user->vendor?->is_banned) {
+            return response()->json([
+                'message' => 'Akun toko Anda telah diban permanen.' . ($user->vendor->ban_reason ? "\nAlasan: " . $user->vendor->ban_reason : ''),
+            ], 403);
+        }
         $token = $user->createToken('auth')->plainTextToken;
         return response()->json([
-            'user' => $this->userResource($user->load('vendor')),
+            'user'  => $this->userResource($user),
             'token' => $token,
         ]);
     }
@@ -96,6 +103,12 @@ class AuthController extends Controller
             return response()->json(['message' => 'Password lama salah'], 422);
         }
         $user->update(['password' => $data['new_password']]); // model cast hashed
+        \App\Models\UserNotification::send(
+            $user->id, 'PASSWORD_CHANGED',
+            'Password Anda diubah',
+            "Password akun Anda baru saja diubah. Jika ini bukan Anda, segera hubungi admin.",
+            '/profile', 'WARNING'
+        );
         // Kirim notif email
         $this->brevo()->send(
             $user->email, $user->name,
@@ -214,10 +227,17 @@ class AuthController extends Controller
         }
         $user = User::find($row->user_id);
         if (!$user) return response()->json(['message' => 'User tidak ditemukan'], 422);
+        $oldEmail = $user->email;
         $user->email = $row->new_email;
         $user->email_verified_at = now();
         $user->save();
         DB::table('email_change_requests')->where('token', $data['token'])->delete();
+        \App\Models\UserNotification::send(
+            $user->id, 'EMAIL_CHANGED',
+            'Email akun Anda berubah',
+            "Email akun Anda diubah dari {$oldEmail} menjadi {$row->new_email}.",
+            '/profile', 'SUCCESS'
+        );
         return response()->json(['ok' => true, 'email' => $row->new_email]);
     }
 
@@ -317,9 +337,11 @@ class AuthController extends Controller
             'email_verified_at' => $u->email_verified_at,
             'phone'             => $u->phone,
             'role'              => $u->role,
-            'vendor_id'         => $u->vendor?->id,
-            'vendor_username'   => $u->vendor?->username,
-            'vendor_status'     => $u->vendor?->verification_status,
+            'vendor_id'             => $u->vendor?->id,
+            'vendor_username'       => $u->vendor?->username,
+            'vendor_status'         => $u->vendor?->verification_status,
+            'vendor_tour_done'      => $u->vendor?->tour_completed_at !== null,
+            'vendor_is_banned'      => (bool) ($u->vendor?->is_banned),
         ];
     }
 }

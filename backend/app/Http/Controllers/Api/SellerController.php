@@ -225,6 +225,24 @@ class SellerController extends Controller
         return response()->json(['ok' => true, 'tracking_no' => $tracking]);
     }
 
+    public function dismissWarning(Request $request)
+    {
+        $vendor = $request->user()->vendor;
+        if (!$vendor) abort(404);
+        $vendor->update(['warning_dismissed_at' => now()]);
+        return response()->json(['ok' => true]);
+    }
+
+    public function finishTour(Request $request)
+    {
+        $vendor = $request->user()->vendor;
+        if (!$vendor) abort(404);
+        if (!$vendor->tour_completed_at) {
+            $vendor->update(['tour_completed_at' => now()]);
+        }
+        return response()->json(['ok' => true]);
+    }
+
     public function updateUsername(Request $request)
     {
         $vendor = $request->user()->vendor;

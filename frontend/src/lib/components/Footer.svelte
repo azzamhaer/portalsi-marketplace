@@ -1,5 +1,34 @@
 <script lang="ts">
   import { settings } from '$lib/stores.svelte';
+
+  const defaultColumns = [
+    { title: 'Belanja', links: [
+      { label: 'Semua Produk', href: '/products' },
+      { label: 'Semua Toko', href: '/vendors' },
+      { label: 'Flash Sale', href: '/products?flash=1' },
+      { label: 'Wishlist', href: '/wishlist' },
+    ]},
+    { title: 'Pembayaran', links: [
+      { label: 'Cara Pembayaran', href: '/payment-info' },
+      { label: 'Virtual Account', href: '/payment-info#va' },
+      { label: 'E-Wallet', href: '/payment-info#ewallet' },
+      { label: 'QRIS', href: '/payment-info#qris' },
+    ]},
+    { title: 'Bantuan', links: [
+      { label: 'Pusat Bantuan', href: '/help' },
+      { label: 'Tentang Kami', href: '/about' },
+      { label: 'Buka Toko', href: '/seller/register' },
+      { label: 'Seller Center', href: '/seller/dashboard' },
+    ]},
+  ];
+
+  const columns = $derived((settings.footerColumns?.length ? settings.footerColumns : defaultColumns) as any[]);
+  const desc = $derived(
+    settings.footerDesc ||
+    'Marketplace multivendor terdepan di Indonesia. Belanja produk asli dari ribuan toko terpercaya dengan pembayaran terenkripsi.'
+  );
+  const contact = $derived(settings.footerContact || 'support@mpsi.id · 0800-1-MPSI');
+  const bottom  = $derived(settings.footerBottom || `© ${new Date().getFullYear()} ${settings.appName ?? 'MPSI'}. Semua hak dilindungi.`);
 </script>
 
 <footer class="mt-16 sm:mt-24 border-t border-ink-100 bg-ink-50/50">
@@ -10,49 +39,28 @@
           {#if settings.logo}
             <img src={settings.logo} alt={settings.appName} class="w-8 h-8 rounded-lg object-cover" />
           {:else}
-            <span class="w-8 h-8 bg-app-primary text-app-pfg rounded-lg grid place-items-center text-sm">{settings.appName?.[0] ?? 'P'}</span>
+            <span class="w-8 h-8 bg-app-primary text-app-pfg rounded-lg grid place-items-center text-sm">{settings.appName?.[0] ?? 'M'}</span>
           {/if}
           {settings.appName ?? 'MPSI'}
         </a>
-        <p class="text-sm text-ink-600 leading-relaxed max-w-sm">
-          Marketplace multivendor terdepan di Indonesia. Belanja produk asli dari ribuan toko terpercaya dengan pembayaran terenkripsi.
-        </p>
-        <p class="text-xs text-ink-400 mt-4">support@portalsi.id · 0800-1-PORTAL</p>
+        <p class="text-sm text-ink-600 leading-relaxed max-w-sm whitespace-pre-line">{desc}</p>
+        <p class="text-xs text-ink-400 mt-4 whitespace-pre-line">{contact}</p>
       </div>
 
-      <div>
-        <h5 class="text-xs font-semibold uppercase tracking-widest text-ink-500 mb-3">Belanja</h5>
-        <ul class="space-y-2 text-sm text-ink-700">
-          <li><a href="/products" class="hover:text-ink-950">Semua Produk</a></li>
-          <li><a href="/vendors"  class="hover:text-ink-950">Semua Toko</a></li>
-          <li><a href="/products?flash=1" class="hover:text-ink-950">Flash Sale</a></li>
-          <li><a href="/wishlist" class="hover:text-ink-950">Wishlist</a></li>
-        </ul>
-      </div>
-
-      <div>
-        <h5 class="text-xs font-semibold uppercase tracking-widest text-ink-500 mb-3">Pembayaran</h5>
-        <ul class="space-y-2 text-sm text-ink-700">
-          <li><a href="/payment-info"        class="hover:text-ink-950">Cara Pembayaran</a></li>
-          <li><a href="/payment-info#va"     class="hover:text-ink-950">Virtual Account</a></li>
-          <li><a href="/payment-info#ewallet"class="hover:text-ink-950">E-Wallet</a></li>
-          <li><a href="/payment-info#qris"   class="hover:text-ink-950">QRIS</a></li>
-        </ul>
-      </div>
-
-      <div>
-        <h5 class="text-xs font-semibold uppercase tracking-widest text-ink-500 mb-3">Bantuan</h5>
-        <ul class="space-y-2 text-sm text-ink-700">
-          <li><a href="/help"            class="hover:text-ink-950">Pusat Bantuan</a></li>
-          <li><a href="/about"           class="hover:text-ink-950">Tentang Kami</a></li>
-          <li><a href="/seller/register" class="hover:text-ink-950">Buka Toko</a></li>
-          <li><a href="/seller/dashboard"class="hover:text-ink-950">Seller Center</a></li>
-        </ul>
-      </div>
+      {#each columns.slice(0, 3) as col}
+        <div>
+          <h5 class="text-xs font-semibold uppercase tracking-widest text-ink-500 mb-3">{col.title}</h5>
+          <ul class="space-y-2 text-sm text-ink-700">
+            {#each (col.links ?? []) as link}
+              <li><a href={link.href} class="hover:text-ink-950">{link.label}</a></li>
+            {/each}
+          </ul>
+        </div>
+      {/each}
     </div>
 
     <div class="mt-10 pt-6 border-t border-ink-200 flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between text-xs text-ink-500">
-      <span>© 2026 {settings.appName ?? 'MPSI'}. Semua hak dilindungi.</span>
+      <span class="whitespace-pre-line">{bottom}</span>
       <span>Pembayaran diamankan dengan enkripsi end-to-end</span>
     </div>
   </div>

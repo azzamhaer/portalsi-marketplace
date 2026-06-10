@@ -114,8 +114,21 @@ class AdminController extends Controller
             'status' => 'required|in:APPROVED,REJECTED',
             'note' => 'nullable|string',
         ]);
-        $v = Vendor::findOrFail($id);
+        $v = Vendor::with('user')->findOrFail($id);
         $v->update(['verification_status' => $data['status'], 'verification_note' => $data['note'] ?? null]);
+
+        if ($v->user_id) {
+            \App\Models\UserNotification::send(
+                $v->user_id, 'VENDOR_VERIFICATION',
+                $data['status'] === 'APPROVED' ? 'Toko Anda terverifikasi!' : 'Verifikasi toko ditolak',
+                $data['status'] === 'APPROVED'
+                    ? "Selamat! Toko \"{$v->name}\" sudah disetujui dan bisa mulai jualan."
+                    : "Verifikasi toko \"{$v->name}\" ditolak admin." . ($data['note'] ? "\nAlasan: " . $data['note'] : ''),
+                $data['status'] === 'APPROVED' ? '/seller/dashboard' : '/seller/pending',
+                $data['status'] === 'APPROVED' ? 'SUCCESS' : 'WARNING'
+            );
+        }
+
         return response()->json($v);
     }
 
@@ -126,6 +139,24 @@ class AdminController extends Controller
         ]);
         $v = Vendor::findOrFail($id);
         $v->update(['badge' => $data['badge'] ?? null]);
+        return response()->json($v);
+    }
+
+    /** Set mode moderasi vendor & pesan peringatan */
+    public function setModeration(Request $request, $id)
+    {
+        $data = $request->validate([
+            'moderation_mode' => 'required|in:NONE,LIMITED,DISABLED',
+            'admin_warning'   => 'nullable|string|max:2000',
+        ]);
+        $v = Vendor::findOrFail($id);
+        $v->moderation_mode = $data['moderation_mode'];
+        // Kalau warning beda dari sebelumnya, reset dismissed
+        if (($data['admin_warning'] ?? null) !== $v->admin_warning) {
+            $v->admin_warning = $data['admin_warning'] ?? null;
+            $v->warning_dismissed_at = null;
+        }
+        $v->save();
         return response()->json($v);
     }
 
@@ -161,6 +192,19 @@ class AdminController extends Controller
         ]);
         $o->update($data);
         return response()->json($o);
+    }
+
+    public function orderDetail($id)
+    {
+        $order = Order::with([
+            'user:id,name,email,phone',
+            'address',
+            'payment',
+            'items.product:id,name,slug,image',
+            'items.vendor:id,name,username,user_id,avatar',
+            'items.vendor.user:id,name,email,phone',
+        ])->findOrFail($id);
+        return response()->json($order);
     }
 
     /* ---------- Returns ---------- */

@@ -33,7 +33,8 @@
       const me: any = await apiEndpoints.me();
       auth.set(me);
       toast.success('Pendaftaran terkirim, menunggu verifikasi admin');
-      goto('/seller/dashboard');
+      // Vendor baru status PENDING — langsung ke halaman pending
+      goto('/seller/pending');
     } catch (e: any) { toast.error(e.message); } finally { saving = false; }
   }
 
