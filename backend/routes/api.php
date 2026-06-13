@@ -146,5 +146,14 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/settings/hero',         [SettingsController::class, 'uploadHero']);
         Route::get('/shipping-options',       [AdminController::class, 'shippingOptions']);
         Route::put('/shipping-options',       [AdminController::class, 'saveShippingOptions']);
+
+        Route::get('/tags',                    [AdminController::class, 'tags']);
+        Route::post('/tags',                   [AdminController::class, 'saveTag']);
+        Route::put('/tags/{id}',               [AdminController::class, 'saveTag']);
+        Route::delete('/tags/{id}',            [AdminController::class, 'deleteTag']);
+        Route::get('/categories',              [AdminController::class, 'adminCategories']);
+        Route::post('/categories',             [AdminController::class, 'saveCategory']);
+        Route::put('/categories/{id}',         [AdminController::class, 'saveCategory']);
+        Route::delete('/categories/{id}',      [AdminController::class, 'deleteCategory']);
     });
 });

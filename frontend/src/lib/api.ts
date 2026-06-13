@@ -1,7 +1,7 @@
 import { browser } from '$app/environment';
 import { PUBLIC_API_URL } from '$env/static/public';
 
-const BASE = PUBLIC_API_URL || 'http://localhost:8000/api';
+const BASE = PUBLIC_API_URL || 'https://api-marketplace.portalsi.com/api';
 
 export class ApiError extends Error {
   constructor(public status: number, public data: any, message: string) { super(message); }
@@ -177,4 +177,10 @@ export const apiEndpoints = {
   adminUploadHero:   (fd: FormData) => api('/admin/settings/hero', { method: 'POST', body: fd as any }),
   adminShipping:     () => api('/admin/shipping-options'),
   adminSaveShipping: (list: any[]) => api('/admin/shipping-options', { method: 'PUT', body: { items: list } as any }),
+  adminTags:         (q='') => api('/admin/tags' + (q ? '?'+q : '')),
+  adminSaveTag:      (id: number | null, b: any) => api(id ? `/admin/tags/${id}` : '/admin/tags', { method: id ? 'PUT' : 'POST', body: b }),
+  adminDeleteTag:    (id: number) => api(`/admin/tags/${id}`, { method: 'DELETE' }),
+  adminCategories:   () => api('/admin/categories'),
+  adminSaveCategory: (id: string | null, b: any) => api(id ? `/admin/categories/${id}` : '/admin/categories', { method: id ? 'PUT' : 'POST', body: b }),
+  adminDeleteCategory: (id: string) => api(`/admin/categories/${id}`, { method: 'DELETE' }),
 };

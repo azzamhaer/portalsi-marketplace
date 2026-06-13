@@ -29,6 +29,15 @@
             <a href={`/category/${c.slug}`} class="block px-3 py-2 rounded-lg transition" class:bg-app-primary={c.id===data.category?.id} class:text-app-pfg={c.id===data.category?.id} class:hover:bg-ink-50={c.id!==data.category?.id}>
               {c.name}
             </a>
+            {#if c.children?.length}
+              <div class="mt-1 space-y-1 pl-3">
+                {#each c.children as child}
+                  <a href={`/category/${child.slug}`} class="block rounded-lg px-3 py-1.5 text-xs transition" class:bg-app-primary={child.id===data.category?.id} class:text-app-pfg={child.id===data.category?.id} class:hover:bg-ink-50={child.id!==data.category?.id}>
+                    #{child.tag_slug || child.slug}
+                  </a>
+                {/each}
+              </div>
+            {/if}
           </li>
         {/each}
         <li><a href="/products" class="block px-3 py-2 rounded-lg hover:bg-ink-50">Semua produk</a></li>

@@ -11,7 +11,7 @@
   let tab = $state<'orders' | 'products' | 'incoming'>('orders');
 
   onMount(async () => {
-    const id = $page.params.id;
+    const id = $page.params.id ?? '0';
     try {
       data = await apiEndpoints.adminUser(+id);
       if (data.user.vendor && data.orders.length === 0) tab = 'products';

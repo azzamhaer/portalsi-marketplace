@@ -4,7 +4,7 @@ import type { PageLoad } from './$types';
 export const load: PageLoad = async ({ fetch }) => {
   // Streaming: home data dimuat asinkron, navigasi instant
   const homePromise = apiEndpoints.home(fetch).catch(() => ({
-    tags: [], flashSale: [], recommended: [], official: []
+    tags: [], categories: [], flashSale: [], recommended: [], official: []
   }));
   return { streamed: { home: homePromise } };
 };

@@ -1,5 +1,7 @@
 <script lang="ts">
   import ProductGrid from '$lib/components/ProductGrid.svelte';
+  import ProductFilterPanel from '$lib/components/ProductFilterPanel.svelte';
+  import Pagination from '$lib/components/Pagination.svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import Icon from '$lib/components/Icon.svelte';
@@ -18,7 +20,7 @@
     <div>
       <div class="section-eyebrow mb-2 flex items-center gap-2"><Icon name="search" size={12} /> Pencarian</div>
       <h1 class="section-title">Hasil untuk "<span class="italic">{data.q}</span>"</h1>
-      <p class="text-sm text-ink-500 mt-1">{data.products.length} produk ditemukan</p>
+      <p class="text-sm text-ink-500 mt-1">{data.meta?.total ?? data.products.length} produk ditemukan</p>
     </div>
     {#if data.products.length}
       <select on:change={(e: any) => setSort(e.target.value)} value={data.sort} class="input-sm input w-full sm:w-56">
@@ -29,5 +31,11 @@
       </select>
     {/if}
   </div>
-  <ProductGrid products={data.products} />
+  <div class="grid gap-8 lg:grid-cols-[270px_1fr]">
+    <ProductFilterPanel tags={data.tags} categories={data.categories} title="Filter pencarian" />
+    <div>
+      <ProductGrid products={data.products} />
+      <Pagination current={data.meta?.current_page ?? 1} last={data.meta?.last_page ?? 1} />
+    </div>
+  </div>
 </div>

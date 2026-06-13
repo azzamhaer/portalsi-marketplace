@@ -13,7 +13,14 @@ class CatalogController extends Controller
 {
     public function categories()
     {
-        return response()->json(Category::orderBy('sort_order')->get());
+        return response()->json(
+            Category::whereNull('parent_id')
+                ->where('is_active', true)
+                ->with(['children' => fn($q) => $q->where('is_active', true)])
+                ->orderBy('sort_order')
+                ->orderBy('name')
+                ->get()
+        );
     }
 
     /** Suggestion live untuk search bar — produk + toko + tag */
@@ -50,19 +57,41 @@ class CatalogController extends Controller
             ->withCount('reviews');
 
         if ($cat = $request->query('category')) {
-            $q->whereHas('category', fn($c) => $c->where('slug', $cat));
+            $category = Category::where('slug', $cat)->first();
+            if ($category?->tag_slug) {
+                $q->whereHas('tagModels', fn($t) => $t->where('slug', $category->tag_slug));
+            } else {
+                $q->whereHas('category', fn($c) => $c->where('slug', $cat));
+            }
         }
         if ($tag = $request->query('tag')) {
             $q->whereHas('tagModels', fn($t) => $t->where('slug', $tag));
         }
+        if ($tags = $request->query('tags')) {
+            $list = array_filter(array_map('trim', explode(',', $tags)));
+            if ($list) $q->whereHas('tagModels', fn($t) => $t->whereIn('slug', $list));
+        }
         if ($vendor = $request->query('vendor')) {
             $q->where('vendor_id', $vendor);
         }
-        if ($search = $request->query('search')) {
+        if ($search = $request->query('search', $request->query('q'))) {
             $q->where(function ($qq) use ($search) {
                 $qq->where('name', 'like', "%$search%")
                    ->orWhere('description', 'like', "%$search%");
             });
+        }
+        if ($min = $request->query('min_price')) $q->where('price', '>=', (int) $min);
+        if ($max = $request->query('max_price')) $q->where('price', '<=', (int) $max);
+        if ($rating = $request->query('min_rating')) $q->where('rating', '>=', (float) $rating);
+        if ($city = trim((string) $request->query('city'))) {
+            $q->whereHas('vendor', fn($v) => $v->where('city', 'like', "%$city%"));
+        }
+        if ($request->boolean('official')) {
+            $q->whereHas('vendor', fn($v) => $v->where('is_official', true));
+        }
+        if ($stock = $request->query('stock')) {
+            if ($stock === 'available') $q->where('stock', '>', 0);
+            if ($stock === 'empty') $q->where('stock', '<=', 0);
         }
         if ($request->boolean('flash')) $q->where('is_flash_sale', true);
         if ($ids = $request->query('ids')) $q->whereIn('id', explode(',', $ids));
@@ -107,10 +136,18 @@ class CatalogController extends Controller
     public function vendors(Request $request)
     {
         $q = Vendor::query();
-        if ($request->query('filter') === 'official') $q->where('is_official', true);
+        if ($request->query('filter') === 'official' || $request->boolean('official')) $q->where('is_official', true);
+        if ($search = trim((string) $request->query('search'))) {
+            $q->where(fn($w) => $w->where('name', 'like', "%$search%")->orWhere('username', 'like', "%$search%")->orWhere('description', 'like', "%$search%"));
+        }
+        if ($city = trim((string) $request->query('city'))) {
+            $q->where('city', 'like', "%$city%");
+        }
+        if ($rating = $request->query('min_rating')) $q->where('rating', '>=', (float) $rating);
         match ($request->query('filter')) {
             'rating' => $q->orderByDesc('rating'),
             'sold'   => $q->orderByDesc('total_sold'),
+            'newest' => $q->orderByDesc('id'),
             default  => $q->orderByDesc('is_official')->orderByDesc('total_sold'),
         };
         // Hanya tampilkan vendor APPROVED & tidak DISABLED ke publik
@@ -161,6 +198,9 @@ class CatalogController extends Controller
     {
         return response()->json([
             'tags'        => Tag::orderByDesc('product_count')->take(20)->get(['slug', 'name', 'product_count as count']),
+            'categories'  => Category::whereNull('parent_id')->where('is_active', true)->where('featured_home', true)
+                ->with(['children' => fn($q) => $q->where('is_active', true)->orderBy('sort_order')->orderBy('name')])
+                ->orderBy('sort_order')->orderBy('name')->take(12)->get(),
             'flashSale'   => Product::where('is_flash_sale', true)->where('is_active', true)->with('tagModels:id,slug')->withCount('reviews')->take(12)->get(),
             'recommended' => Product::where('is_active', true)->with('tagModels:id,slug')->withCount('reviews')->orderByDesc('sold')->take(24)->get(),
             'official'    => Vendor::where('is_official', true)->where('verification_status', 'APPROVED')->take(6)->get(),

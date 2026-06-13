@@ -3,6 +3,8 @@
   import Header from '$lib/components/Header.svelte';
   import Footer from '$lib/components/Footer.svelte';
   import Toaster from '$lib/components/Toaster.svelte';
+  import GlobalLoadingBar from '$lib/components/GlobalLoadingBar.svelte';
+  import MobileBottomBar from '$lib/components/MobileBottomBar.svelte';
   import EmailVerificationGate from '$lib/components/EmailVerificationGate.svelte';
   import { onMount } from 'svelte';
   import { auth, settings, wishlist, applyPalette } from '$lib/stores.svelte';
@@ -74,8 +76,9 @@
 </svelte:head>
 
 <div class="min-h-screen flex flex-col">
+  <GlobalLoadingBar />
   <Header />
-  <main class="flex-1">
+  <main class="flex-1 pb-24 md:pb-0">
     {#if needsVerify}
       <EmailVerificationGate />
     {:else}
@@ -83,5 +86,6 @@
     {/if}
   </main>
   <Footer />
+  <MobileBottomBar />
   <Toaster />
 </div>

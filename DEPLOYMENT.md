@@ -1,527 +1,432 @@
-# Deployment Guide — MPSI Marketplace
+# Deployment MPSI Marketplace ke CyberPanel/OpenLiteSpeed
 
-Panduan deploy ke VPS dengan **CyberPanel** menggunakan 2 subdomain terpisah:
-- `mpsi.contoh.com` → Frontend SvelteKit (Node SSR)
-- `api.mpsi.contoh.com` → Backend Laravel 11
+Target production:
 
-> Asumsi: VPS Ubuntu 22.04 + CyberPanel sudah terinstall, domain `contoh.com` sudah diarahkan ke IP VPS via A record.
+- Frontend SvelteKit Node SSR: `https://marketplace.portalsi.com`
+- Backend Laravel API: `https://api-marketplace.portalsi.com`
+- Node frontend listen lokal: `127.0.0.1:3001`
 
----
+Panduan ini aman dipakai untuk deploy awal maupun update revisi.
 
-## 1. Persiapan Server (sekali saja)
+## 1. Persiapan VPS
 
-SSH ke VPS sebagai root:
+Login SSH:
 
 ```bash
-ssh root@<IP_VPS>
+ssh root@IP_VPS
 ```
 
-Install Node.js 20 LTS (kalau belum ada):
+Pastikan dependency tersedia:
 
 ```bash
-curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-apt install -y nodejs
-node -v   # harus v20.x
+node -v
 npm -v
+php -v
+composer -V
+pm2 -v
 ```
 
-Install PM2 untuk Node process manager:
+Rekomendasi:
+
+- Node.js 20 LTS
+- PHP 8.2+
+- Composer 2
+- PM2 global
+
+Install PM2 jika belum ada:
 
 ```bash
 npm install -g pm2
 ```
 
-Cek PHP 8.2 dan Composer (CyberPanel sudah include):
+## 2. DNS dan CyberPanel
 
-```bash
-php -v
-composer -V
-# kalau composer belum ada:
-curl -sS https://getcomposer.org/installer | php
-mv composer.phar /usr/local/bin/composer
-chmod +x /usr/local/bin/composer
+Buat dua website/subdomain di CyberPanel:
+
+- `marketplace.portalsi.com`
+- `api-marketplace.portalsi.com`
+
+Pastikan DNS A record keduanya mengarah ke IP VPS.
+
+Issue SSL untuk keduanya lewat:
+
+```text
+CyberPanel -> SSL -> Manage SSL -> Issue SSL
 ```
 
----
+## 3. Deploy Backend Laravel
 
-## 2. Buat Subdomain di CyberPanel
-
-### 2.1 Subdomain Backend (`api.mpsi.contoh.com`)
-
-1. Login CyberPanel di `https://<IP_VPS>:8090`
-2. **Websites → Create Website**
-3. Pilih package, isi:
-   - Domain: `api.mpsi.contoh.com`
-   - Email: email admin Anda
-   - PHP: 8.2
-   - SSL: ✓ (centang issue SSL)
-   - DKIM: opsional
-4. **Create Website**
-5. Tunggu CyberPanel issue SSL + setup vhost (~1 menit)
-
-### 2.2 Subdomain Frontend (`mpsi.contoh.com`)
-
-Ulangi langkah di atas dengan domain `mpsi.contoh.com`. PHP-nya tidak akan dipakai (kita pakai Node), tapi tetap pilih 8.2 untuk kepraktisan.
-
-### 2.3 Buat Database MySQL
-
-1. **Databases → Create Database**
-2. Website: `api.mpsi.contoh.com`
-3. Database Name: `mpsi` (atau apapun)
-4. User: `mpsi_user`
-5. Password: generate strong password — **simpan**
-6. **Create**
-
----
-
-## 3. Deploy Backend (Laravel)
-
-### 3.1 Upload kode
-
-SSH ke VPS, pindah ke direktori site backend:
+Folder backend:
 
 ```bash
-cd /home/api.mpsi.contoh.com/public_html
+cd /home/api-marketplace.portalsi.com/public_html
 ```
 
-Pull kode dari git (kalau pakai git) atau upload via SFTP/FTP. Contoh dengan git:
+Upload isi folder lokal `backend/` ke folder tersebut. Setelah upload:
 
 ```bash
-# Hapus dulu file default cyberpanel
-rm -rf *
-
-# Clone repo (asumsi sudah punya repo di GitHub/GitLab)
-git clone https://github.com/USERNAME/portalsi-marketplace.git temp
-mv temp/backend/* temp/backend/.* . 2>/dev/null
-rm -rf temp
-```
-
-Atau **upload manual** isi folder `backend/` saja ke `/home/api.mpsi.contoh.com/public_html/`.
-
-### 3.2 Install dependencies
-
-```bash
-cd /home/api.mpsi.contoh.com/public_html
 composer install --no-dev --optimize-autoloader
 ```
 
-### 3.3 Konfigurasi `.env`
-
-```bash
-cp .env.example .env
-nano .env
-```
-
-Edit isi penting:
+Buat atau edit `.env`:
 
 ```env
 APP_NAME=MPSI
 APP_ENV=production
-APP_KEY=
 APP_DEBUG=false
-APP_URL=https://api.mpsi.contoh.com
+APP_URL=https://api-marketplace.portalsi.com
+
+FRONTEND_URL=https://marketplace.portalsi.com
 
 DB_CONNECTION=mysql
 DB_HOST=127.0.0.1
 DB_PORT=3306
-DB_DATABASE=mpsi
-DB_USERNAME=mpsi_user
-DB_PASSWORD=<password_yang_disimpan_tadi>
+DB_DATABASE=nama_database
+DB_USERNAME=user_database
+DB_PASSWORD=password_database
 
-# Frontend URL — penting untuk email links
-FRONTEND_URL=https://mpsi.contoh.com
-
-# Brevo (kalau sudah punya)
-BREVO_API_KEY=xkeysib-...
-BREVO_SENDER_EMAIL=noreply@contoh.com
-BREVO_SENDER_NAME=MPSI
-
-# Tripay production
 TRIPAY_MODE=production
-TRIPAY_API_KEY=...
-TRIPAY_PRIVATE_KEY=...
-TRIPAY_MERCHANT_CODE=T...
+TRIPAY_API_KEY=
+TRIPAY_PRIVATE_KEY=
+TRIPAY_MERCHANT_CODE=
+
+BREVO_API_KEY=
+BREVO_SENDER_EMAIL=
+BREVO_SENDER_NAME=MPSI
 ```
 
-Generate APP_KEY:
+Generate key jika deploy pertama:
 
 ```bash
 php artisan key:generate
 ```
 
-### 3.4 Migrate + seed
+Jalankan migrasi dan cache:
 
 ```bash
 php artisan migrate --force
 php artisan db:seed --class=SettingsSeeder --force
-# Optional: seed demo data
-# php artisan db:seed --force
-```
-
-### 3.5 Cache config & permission
-
-```bash
+php artisan config:clear
+php artisan route:clear
+php artisan view:clear
 php artisan config:cache
 php artisan route:cache
-php artisan view:cache
+```
 
-# Storage & cache permissions
-chown -R cyberpanel:cyberpanel storage bootstrap/cache
+Set permission:
+
+```bash
+chown -R marke9597:marke9597 storage bootstrap/cache
 chmod -R 775 storage bootstrap/cache
 ```
 
-### 3.6 Point document root ke `public/`
+Sesuaikan user `marke9597` dengan user website CyberPanel jika berbeda.
+
+## 4. Backend Document Root
+
+Document root API harus mengarah ke folder Laravel `public`.
 
 Di CyberPanel:
 
-1. **Websites → List Websites → Manage `api.mpsi.contoh.com`**
-2. **vHost Conf** (atau **Rewrite Rules**)
-3. Cari baris `DocumentRoot` di vhost dan ubah ke:
-   ```
-   DocumentRoot /home/api.mpsi.contoh.com/public_html/public
-   ```
-4. **Save & Restart**
-
-Alternatif (tanpa edit vhost): buat `.htaccess` di `/home/api.mpsi.contoh.com/public_html/.htaccess`:
-
-```apache
-<IfModule mod_rewrite.c>
-  RewriteEngine On
-  RewriteRule ^(.*)$ public/$1 [L]
-</IfModule>
+```text
+Websites -> List Websites -> Manage api-marketplace.portalsi.com -> vHost Conf
 ```
 
-### 3.7 Test backend
+Pastikan:
 
-Buka di browser: `https://api.mpsi.contoh.com/api/settings/public`
+```text
+docRoot $VH_ROOT/public_html/public
+```
 
-Harus return JSON. Kalau error 500, cek log:
+Restart OpenLiteSpeed:
+
 ```bash
-tail -50 /home/api.mpsi.contoh.com/public_html/storage/logs/laravel.log
+systemctl restart lsws
 ```
 
----
+Test API:
 
-## 4. Deploy Frontend (SvelteKit)
+```bash
+curl -I https://api-marketplace.portalsi.com/api/settings/public
+```
 
-### 4.1 Build di local (lebih cepat) atau di server
+Harus 200 dan return JSON jika dibuka di browser.
 
-**Opsi A: Build di local**, upload hasil build.
+## 5. Build Frontend di Lokal
 
-Di komputer lokal Anda:
+Di komputer lokal:
 
 ```bash
 cd frontend
-echo "PUBLIC_API_URL=https://api.mpsi.contoh.com/api" > .env.production
+```
+
+Pastikan `.env.production` berisi:
+
+```env
+PUBLIC_API_URL=https://api-marketplace.portalsi.com/api
+```
+
+Penting: file `.env.production` harus UTF-8, bukan UTF-16. Cek hasil build agar tidak ada `localhost:8000`:
+
+```bash
 npm install
 npm run build
+grep -R "localhost:8000" -n build .svelte-kit 2>/dev/null
+grep -R "api-marketplace.portalsi.com" -n build .svelte-kit 2>/dev/null
 ```
 
-Ini menghasilkan folder `build/` yang berisi Node SSR app.
-
-Upload via SCP/SFTP:
-- `build/` → `/home/mpsi.contoh.com/public_html/build/`
-- `package.json` → `/home/mpsi.contoh.com/public_html/package.json`
-- `package-lock.json` → `/home/mpsi.contoh.com/public_html/package-lock.json`
-
-### 4.2 Atau build di server
+Jika masih ada `localhost:8000`, hapus cache dan build ulang:
 
 ```bash
-cd /home/mpsi.contoh.com/public_html
-rm -rf *
-git clone https://github.com/USERNAME/portalsi-marketplace.git temp
-mv temp/frontend/* temp/frontend/.* . 2>/dev/null
-rm -rf temp
-
-# Setup env
-echo "PUBLIC_API_URL=https://api.mpsi.contoh.com/api" > .env.production
-
-# Install + build
-npm install
+rm -rf build .svelte-kit
 npm run build
 ```
 
-### 4.3 Install adapter-node (kalau belum)
+Upload ke server file/folder berikut dari folder `frontend`:
 
-Cek `frontend/svelte.config.js`. Pastikan pakai `@sveltejs/adapter-node`:
+- `build/`
+- `package.json`
+- `package-lock.json`
 
-```bash
-cd /home/mpsi.contoh.com/public_html
-npm install --save-dev @sveltejs/adapter-node
+Struktur setelah upload ke `/home/marketplace.portalsi.com/public_html` minimal:
+
+```text
+build/
+package.json
+package-lock.json
 ```
 
-Edit `svelte.config.js`:
+## 6. Jalankan Frontend dengan PM2
 
-```js
-import adapter from '@sveltejs/adapter-node';
-import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
-
-export default {
-  preprocess: vitePreprocess(),
-  kit: {
-    adapter: adapter({ out: 'build' })
-  }
-};
-```
-
-Build ulang:
+Di server:
 
 ```bash
-npm run build
-```
-
-### 4.4 Install production deps only
-
-```bash
-cd /home/mpsi.contoh.com/public_html
+cd /home/marketplace.portalsi.com/public_html
 npm ci --omit=dev
+pm2 delete mpsi-frontend
+PORT=3001 HOST=127.0.0.1 ORIGIN=https://marketplace.portalsi.com pm2 start build/index.js --name mpsi-frontend
+pm2 save
 ```
 
-### 4.5 Start Node server via PM2
+Jika sebelumnya Anda mengekstrak isi `build/` langsung ke root `public_html`, command-nya menjadi:
 
 ```bash
-cd /home/mpsi.contoh.com/public_html
-PORT=3000 HOST=127.0.0.1 pm2 start build/index.js --name mpsi-frontend
-pm2 save
-pm2 startup
-# Jalankan baris perintah yang muncul (untuk auto-start setelah reboot)
+PORT=3001 HOST=127.0.0.1 ORIGIN=https://marketplace.portalsi.com pm2 start index.js --name mpsi-frontend
 ```
 
-### 4.6 Reverse proxy: Nginx → Node 3000
+Rekomendasi: simpan tetap di folder `build/`, lalu jalankan `build/index.js` agar rapi.
 
-CyberPanel pakai OpenLiteSpeed atau Apache. Untuk reverse proxy ke Node, edit vhost.
+Test Node lokal:
 
-**Untuk OpenLiteSpeed** (default CyberPanel):
-
-1. CyberPanel → **Websites → mpsi.contoh.com → vHost Conf**
-2. Tambahkan context proxy:
-
+```bash
+curl -I http://127.0.0.1:3001
+pm2 logs mpsi-frontend
 ```
-context / {
-  type                    proxy
-  handler                 nodeJsProxy
-  addDefaultCharset       off
+
+## 7. Reverse Proxy OpenLiteSpeed ke Node
+
+Di CyberPanel:
+
+```text
+Websites -> List Websites -> Manage marketplace.portalsi.com -> vHost Conf
+```
+
+Gunakan konfigurasi seperti ini:
+
+```text
+docRoot                   $VH_ROOT/public_html
+vhDomain                  $VH_NAME
+vhAliases                 www.$VH_NAME
+adminEmails               admin@portalsi.com
+enableGzip                1
+enableIpGeo               1
+
+index  {
+  useServer               0
+  indexFiles              index.html
 }
 
-extprocessor nodeJsProxy {
+errorlog $VH_ROOT/logs/$VH_NAME.error_log {
+  useServer               0
+  logLevel                WARN
+  rollingSize             10M
+}
+
+accesslog $VH_ROOT/logs/$VH_NAME.access_log {
+  useServer               0
+  logFormat               "%h %l %u %t \"%r\" %>s %b \"%{Referer}i\" \"%{User-Agent}i\""
+  logHeaders              5
+  rollingSize             10M
+  keepDays                10
+  compressArchive         1
+}
+
+extprocessor mpsi-node {
   type                    proxy
-  address                 127.0.0.1:3000
+  address                 http://127.0.0.1:3001
   maxConns                100
-  pcKeepAliveTimeout      60
   initTimeout             60
   retryTimeout            0
   respBuffer              0
 }
+
+rewrite  {
+  enable                  1
+  autoLoadHtaccess        0
+}
+
+context / {
+  type                    proxy
+  handler                 mpsi-node
+  allowBrowse             1
+  addDefaultCharset       off
+
+  rewrite  {
+    enable                0
+  }
+}
+
+context /.well-known/acme-challenge {
+  location                /usr/local/lsws/Example/html/.well-known/acme-challenge
+  allowBrowse             1
+
+  rewrite  {
+    enable                0
+  }
+  addDefaultCharset       off
+}
 ```
 
-3. **Save & Restart**
+Biarkan blok `vhssl` yang sudah dibuat CyberPanel tetap ada.
 
-**Untuk Apache**, edit `.htaccess` di document root:
-
-```apache
-RewriteEngine On
-RewriteRule ^(.*)$ http://127.0.0.1:3000/$1 [P,L]
-ProxyPassReverse / http://127.0.0.1:3000/
-```
-
-Dan pastikan modul Apache `mod_proxy` + `mod_proxy_http` aktif.
-
-### 4.7 Test frontend
-
-Buka `https://mpsi.contoh.com`. Harus tampil landing page MPSI.
-
----
-
-## 5. SSL (HTTPS)
-
-CyberPanel sudah otomatis issue SSL Let's Encrypt saat create website kalau Anda centang. Verifikasi:
-
-1. CyberPanel → **SSL → Manage SSL**
-2. Pilih `api.mpsi.contoh.com` → **Issue SSL** kalau belum
-3. Ulangi untuk `mpsi.contoh.com`
-
-Sertifikat auto-renew 80 hari sebelum expired.
-
----
-
-## 6. Konfigurasi CORS (Backend → Frontend cross-origin)
-
-Edit `backend/config/cors.php`:
-
-```php
-return [
-    'paths' => ['api/*', 'sanctum/csrf-cookie'],
-    'allowed_methods' => ['*'],
-    'allowed_origins' => [
-        'https://mpsi.contoh.com',
-        'http://localhost:5173', // untuk dev
-    ],
-    'allowed_origins_patterns' => [],
-    'allowed_headers' => ['*'],
-    'exposed_headers' => [],
-    'max_age' => 0,
-    'supports_credentials' => true,
-];
-```
-
-Restart cache:
+Restart:
 
 ```bash
-cd /home/api.mpsi.contoh.com/public_html
-php artisan config:clear
-php artisan config:cache
+systemctl restart lsws
 ```
 
----
+Test:
 
-## 7. Konfigurasi Tripay Callback URL
+```bash
+curl -I http://127.0.0.1:3001
+curl -I https://marketplace.portalsi.com
+```
 
-Login dashboard Tripay → **Merchant → Konfigurasi**:
+Keduanya harus 200.
 
-- Callback URL: `https://api.mpsi.contoh.com/api/tripay/callback`
-- Return URL: `https://mpsi.contoh.com/orders` (atau order detail)
+## 8. Update Revisi Baru
 
----
+Backend:
 
-## 8. Cron Job Laravel
+```bash
+cd /home/api-marketplace.portalsi.com/public_html
+composer install --no-dev --optimize-autoloader
+php artisan migrate --force
+php artisan config:clear
+php artisan route:clear
+php artisan view:clear
+php artisan config:cache
+php artisan route:cache
+```
 
-Tambah ke crontab:
+Frontend:
+
+```bash
+cd /home/marketplace.portalsi.com/public_html
+npm ci --omit=dev
+pm2 restart mpsi-frontend --update-env
+```
+
+Jika upload build baru, stop dulu supaya tidak tercampur file lama:
+
+```bash
+cd /home/marketplace.portalsi.com/public_html
+pm2 stop mpsi-frontend
+rm -rf build
+```
+
+Upload folder `build/` baru, lalu:
+
+```bash
+pm2 restart mpsi-frontend --update-env
+```
+
+## 9. Cek Error dan Log
+
+Frontend Node:
+
+```bash
+pm2 status
+pm2 logs mpsi-frontend --lines 100
+```
+
+OpenLiteSpeed:
+
+```bash
+tail -100 /usr/local/lsws/logs/error.log
+tail -100 /home/marketplace.portalsi.com/logs/marketplace.portalsi.com.error_log
+tail -100 /home/marketplace.portalsi.com/logs/marketplace.portalsi.com.access_log
+```
+
+Laravel:
+
+```bash
+tail -100 /home/api-marketplace.portalsi.com/public_html/storage/logs/laravel.log
+```
+
+Cek API dari server:
+
+```bash
+curl -I https://api-marketplace.portalsi.com/api/settings/public
+curl https://api-marketplace.portalsi.com/api/home
+```
+
+Cek frontend tidak membaca localhost:
+
+```bash
+cd /home/marketplace.portalsi.com/public_html
+grep -R "localhost:8000" -n build node_modules --exclude-dir=node_modules 2>/dev/null
+grep -R "api-marketplace.portalsi.com" -n build 2>/dev/null
+```
+
+## 10. Cloudflare
+
+Jika memakai Cloudflare dan hasil deploy masih tampak lama:
+
+1. Buka Cloudflare dashboard.
+2. Pilih domain `portalsi.com`.
+3. Caching -> Configuration.
+4. Purge Everything.
+
+Lalu hard refresh browser:
+
+- Windows/Linux: `Ctrl + Shift + R`
+- DevTools: centang `Disable cache`, lalu reload.
+
+## 11. Cron Laravel
+
+Tambahkan scheduler:
 
 ```bash
 crontab -e
 ```
 
-Append:
+Isi:
 
-```
-* * * * * cd /home/api.mpsi.contoh.com/public_html && php artisan schedule:run >> /dev/null 2>&1
-```
-
----
-
-## 9. Maintenance & Update
-
-### Update kode backend
-
-```bash
-cd /home/api.mpsi.contoh.com/public_html
-git pull
-composer install --no-dev --optimize-autoloader
-php artisan migrate --force
-php artisan config:cache
-php artisan route:cache
+```text
+* * * * * cd /home/api-marketplace.portalsi.com/public_html && php artisan schedule:run >> /dev/null 2>&1
 ```
 
-### Update kode frontend
+## 12. Checklist Production
 
-```bash
-cd /home/mpsi.contoh.com/public_html
-git pull
-npm ci
-npm run build
-pm2 restart mpsi-frontend
-```
-
-### Cek log
-
-- Laravel: `tail -f /home/api.mpsi.contoh.com/public_html/storage/logs/laravel.log`
-- Node: `pm2 logs mpsi-frontend`
-- OpenLiteSpeed: `tail -f /usr/local/lsws/logs/error.log`
-
----
-
-## 10. Backup
-
-### Database otomatis
-
-CyberPanel → **Backup → Schedule Backup** → pilih daily ke local atau Google Drive/SFTP.
-
-### Manual mysqldump
-
-```bash
-mysqldump -u mpsi_user -p mpsi > /root/backup/mpsi-$(date +%Y%m%d).sql
-```
-
-### File backup
-
-```bash
-tar czf /root/backup/mpsi-files-$(date +%Y%m%d).tar.gz \
-  /home/api.mpsi.contoh.com/public_html \
-  /home/mpsi.contoh.com/public_html
-```
-
----
-
-## 11. Hardening (Production checklist)
-
-- [ ] `APP_DEBUG=false` di backend `.env`
-- [ ] DB password generated, 24+ char
-- [ ] Firewall: hanya port 22, 80, 443, 8090 (CyberPanel) terbuka
-- [ ] Disable SSH password login, pakai SSH key
-- [ ] Cron untuk SSL auto-renew (CyberPanel handle)
-- [ ] PM2 startup script aktif (sudah dilakukan di 4.5)
-- [ ] Brevo API key set di admin settings (atau .env)
-- [ ] Tripay production mode + credentials valid
-- [ ] CORS allowed_origins hanya domain frontend Anda
-- [ ] Logo & branding sudah dicustom via admin Tampilan
-- [ ] Test flow lengkap: register → verify email → buka toko → admin approve → order → payment → ship → done
-
----
-
-## 12. Troubleshooting
-
-| Masalah | Solusi |
-|---|---|
-| Frontend 502 Bad Gateway | PM2 stopped. `pm2 restart mpsi-frontend`. Cek log. |
-| Frontend "PUBLIC_API_URL undefined" | Build ulang dengan `.env.production` benar. |
-| CORS error di browser console | Tambah origin frontend ke `config/cors.php`, `config:cache`. |
-| API 500 di production | `tail -f storage/logs/laravel.log`. Cek `.env` & permission `storage/`. |
-| SSL not valid | Re-issue dari CyberPanel SSL menu. |
-| Tripay callback gagal | Cek log Laravel, verifikasi signature di TripayService. |
-| Email tidak terkirim | Cek Brevo API key di admin, dan log Laravel `Brevo:disabled` atau `Brevo:error`. |
-| PM2 hilang setelah reboot | `pm2 startup` lalu jalankan command yang muncul, `pm2 save`. |
-| Database error "table doesn't exist" | `php artisan migrate --force`. |
-
----
-
-## 13. Performance Tuning
-
-### Backend
-
-```bash
-# Composer dump-autoload optimized
-composer dump-autoload --optimize --classmap-authoritative
-
-# Octave/OpCache (php.ini)
-opcache.enable=1
-opcache.memory_consumption=256
-opcache.max_accelerated_files=20000
-opcache.validate_timestamps=0  # set 0 di production
-```
-
-### Frontend
-
-```bash
-# Cluster mode untuk lebih banyak CPU
-pm2 delete mpsi-frontend
-PORT=3000 HOST=127.0.0.1 pm2 start build/index.js --name mpsi-frontend -i max
-pm2 save
-```
-
-### MySQL
-
-Di `/etc/mysql/mysql.conf.d/mysqld.cnf`:
-
-```
-innodb_buffer_pool_size = 1G  # sesuaikan dengan RAM VPS
-max_connections = 200
-```
-
-Restart MySQL:
-```bash
-systemctl restart mysql
-```
-
----
-
-Selesai! Aplikasi MPSI Anda siap melayani pembeli & penjual di production. 🚀
+- `APP_DEBUG=false`
+- `APP_URL=https://api-marketplace.portalsi.com`
+- `FRONTEND_URL=https://marketplace.portalsi.com`
+- `.env.production` frontend berisi `PUBLIC_API_URL=https://api-marketplace.portalsi.com/api`
+- `npm run build` tidak mengandung `localhost:8000`
+- `php artisan migrate --force` sudah jalan
+- PM2 status `online`
+- OLS context `/` proxy ke `http://127.0.0.1:3001`
+- SSL aktif untuk frontend dan backend
+- Admin bisa akses `/admin/catalog` untuk kelola kategori/tag
+- Admin bisa matikan hero dari `/admin/appearance`

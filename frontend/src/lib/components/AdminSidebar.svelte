@@ -10,6 +10,7 @@
     { href:'/admin/reports',          label:'Laporan',       icon:'flag' },
     { href:'/admin/withdrawals',      label:'Penarikan',     icon:'wallet' },
     { href:'/admin/shipping',         label:'Opsi Kurir',    icon:'truck' },
+    { href:'/admin/catalog',          label:'Kategori & Tag', icon:'tags' },
     { href:'/admin/appearance',       label:'Tampilan',      icon:'palette' },
     { href:'/admin/settings',         label:'Pengaturan',    icon:'settings' }
   ];

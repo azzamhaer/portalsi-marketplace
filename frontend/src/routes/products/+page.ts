@@ -14,11 +14,15 @@ export const load: PageLoad = async ({ fetch, url }) => {
     }))
     .catch(() => ({ products: [], meta: null }));
 
-  const tagsPromise = apiEndpoints.tags(fetch).catch(() => []);
+  const filtersPromise = Promise.all([
+    apiEndpoints.tags(fetch).catch(() => []),
+    apiEndpoints.categories(fetch).catch(() => []),
+  ]).then(([tags, categories]) => ({ tags, categories }));
 
   return {
-    streamed: { result: productsPromise, tags: tagsPromise },
+    streamed: { result: productsPromise, filters: filtersPromise },
     tag: url.searchParams.get('tag') ?? '',
+    search: url.searchParams.get('search') ?? '',
     sort: url.searchParams.get('sort') ?? 'popular',
   };
 };

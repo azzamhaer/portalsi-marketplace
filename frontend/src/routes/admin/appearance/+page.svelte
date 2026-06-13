@@ -22,6 +22,7 @@
       await apiEndpoints.adminSaveSettings({
         app_name: s.app_name, tagline: s.tagline, palette: s.palette,
         primary_color: s.primary_color, primary_fg: s.primary_fg, accent_color: s.accent_color,
+        hero_enabled: !!s.hero_enabled,
         hero_title: s.hero_title, hero_subtitle: s.hero_subtitle,
         hero_cta_label: s.hero_cta_label, hero_cta_href: s.hero_cta_href,
         payment_intro: s.payment_intro, help_intro: s.help_intro,
@@ -187,6 +188,13 @@
     <div class="space-y-5">
       <div class="card">
         <h3 class="font-semibold mb-4">Halaman Beranda — Hero Section</h3>
+        <label class="mb-4 flex items-center justify-between gap-4 rounded-2xl border border-ink-100 bg-ink-50 px-4 py-3">
+          <span>
+            <span class="block text-sm font-semibold">Tampilkan hero di homepage</span>
+            <span class="block text-xs text-ink-500">Matikan kalau ingin mobile langsung fokus ke kategori produk.</span>
+          </span>
+          <input type="checkbox" bind:checked={s.hero_enabled} class="h-5 w-5" />
+        </label>
         <div class="grid sm:grid-cols-2 gap-4">
           <div><label class="label">Judul Hero</label><input bind:value={s.hero_title} class="input" /></div>
           <div><label class="label">Subjudul Hero</label><input bind:value={s.hero_subtitle} class="input" /></div>

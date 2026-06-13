@@ -13,8 +13,9 @@
   let trackingNo = $state('');
 
   onMount(async () => {
+    const id = $page.params.id ?? '0';
     try {
-      order = await apiEndpoints.adminOrder(+$page.params.id);
+      order = await apiEndpoints.adminOrder(+id);
       newStatus = order.status;
       trackingNo = order.tracking_no ?? '';
     } catch (e: any) { toast.error(e.message); } finally { loading = false; }

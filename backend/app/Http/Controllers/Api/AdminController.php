@@ -3,13 +3,16 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Category;
 use App\Models\Order;
 use App\Models\OrderReturn;
 use App\Models\ShippingOption;
+use App\Models\Tag;
 use App\Models\User;
 use App\Models\Vendor;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class AdminController extends Controller
 {
@@ -236,6 +239,100 @@ class AdminController extends Controller
                 ShippingOption::create(array_merge($it, ['sort_order' => $i, 'is_active' => $it['is_active'] ?? true]));
             }
         });
+        return response()->json(['ok' => true]);
+    }
+
+    /* ---------- Catalog navigation ---------- */
+    public function tags(Request $request)
+    {
+        $q = Tag::query()->orderByDesc('product_count')->orderBy('name');
+        if ($s = trim((string) $request->query('search'))) {
+            $q->where(fn($w) => $w->where('slug', 'like', "%$s%")->orWhere('name', 'like', "%$s%"));
+        }
+        return response()->json($q->get());
+    }
+
+    public function saveTag(Request $request, $id = null)
+    {
+        $data = $request->validate([
+            'name' => 'required|string|max:80',
+            'slug' => 'nullable|string|max:80',
+        ]);
+        $slug = Str::slug(strtolower($data['slug'] ?: $data['name']));
+        if (!$slug) return response()->json(['message' => 'Slug tag tidak valid'], 422);
+        $exists = Tag::where('slug', $slug)->when($id, fn($q) => $q->where('id', '!=', $id))->exists();
+        if ($exists) return response()->json(['message' => 'Slug tag sudah dipakai'], 422);
+
+        $tag = $id ? Tag::findOrFail($id) : new Tag();
+        $tag->fill(['name' => $data['name'], 'slug' => $slug]);
+        $tag->save();
+        return response()->json($tag);
+    }
+
+    public function deleteTag($id)
+    {
+        $tag = Tag::findOrFail($id);
+        $tag->products()->detach();
+        $tag->delete();
+        return response()->json(['ok' => true]);
+    }
+
+    public function adminCategories()
+    {
+        return response()->json(
+            Category::whereNull('parent_id')
+                ->with('children')
+                ->orderBy('sort_order')
+                ->orderBy('name')
+                ->get()
+        );
+    }
+
+    public function saveCategory(Request $request, $id = null)
+    {
+        $data = $request->validate([
+            'parent_id' => 'nullable|string|exists:categories,id',
+            'name' => 'required|string|max:80',
+            'slug' => 'nullable|string|max:80',
+            'tag_slug' => 'nullable|string|max:80',
+            'icon' => 'nullable|string|max:80',
+            'color' => 'nullable|string|max:20',
+            'sort_order' => 'nullable|integer',
+            'is_active' => 'sometimes|boolean',
+            'featured_home' => 'sometimes|boolean',
+        ]);
+
+        $slug = Str::slug(strtolower($data['slug'] ?: $data['name']));
+        if (!$slug) return response()->json(['message' => 'Slug kategori tidak valid'], 422);
+        $catId = $id ?: $slug;
+        $exists = Category::where('slug', $slug)->when($id, fn($q) => $q->where('id', '!=', $id))->exists();
+        if ($exists) return response()->json(['message' => 'Slug kategori sudah dipakai'], 422);
+        if (($data['parent_id'] ?? null) === $catId) return response()->json(['message' => 'Parent kategori tidak valid'], 422);
+
+        $category = $id ? Category::findOrFail($id) : new Category(['id' => $catId]);
+        $category->fill([
+            'parent_id' => $data['parent_id'] ?? null,
+            'name' => $data['name'],
+            'slug' => $slug,
+            'tag_slug' => $data['tag_slug'] ? Str::slug(strtolower($data['tag_slug'])) : $slug,
+            'icon' => $data['icon'] ?? 'tag',
+            'color' => $data['color'] ?? '#0a0a0a',
+            'sort_order' => $data['sort_order'] ?? 0,
+            'is_active' => $data['is_active'] ?? true,
+            'featured_home' => $data['featured_home'] ?? true,
+        ]);
+        $category->save();
+
+        return response()->json($category);
+    }
+
+    public function deleteCategory($id)
+    {
+        $category = Category::withCount(['products', 'children'])->findOrFail($id);
+        if ($category->products_count || $category->children_count) {
+            return response()->json(['message' => 'Kategori masih punya produk atau subkategori'], 422);
+        }
+        $category->delete();
         return response()->json(['ok' => true]);
     }
 }

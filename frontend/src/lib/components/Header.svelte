@@ -215,8 +215,8 @@
   {#if mobileOpen}
     {@const isAdmin = auth.user?.role === 'ADMIN'}
     {@const navItems = isAdmin
-      ? [['Beranda','/'],['Produk','/products'],['Toko','/vendors'],['Pembayaran','/payment-info'],['Bantuan','/help']]
-      : [['Beranda','/'],['Produk','/products'],['Toko','/vendors'],['Keranjang','/cart'],['Wishlist','/wishlist'],['Chat','/chats'],['Pesanan','/orders'],['Pembayaran','/payment-info'],['Bantuan','/help']]}
+      ? [['Admin Center','/admin'],['Toko','/vendors'],['Pembayaran','/payment-info'],['Bantuan','/help']]
+      : [['Toko','/vendors'],['Keranjang','/cart'],['Wishlist','/wishlist'],['Chat','/chats'],['Pesanan','/orders'],['Pembayaran','/payment-info'],['Bantuan','/help']]}
     <div class="md:hidden border-t border-ink-100 bg-white animate-fadeIn max-h-[calc(100vh-64px)] overflow-y-auto overscroll-contain">
       <div class="container-x py-4 space-y-3 pb-8">
         <form on:submit={search} class="flex items-center gap-2 bg-ink-50 rounded-full pl-4 pr-1.5 py-1.5">
@@ -229,15 +229,14 @@
             <a {href} on:click={() => mobileOpen = false} class="px-3 py-2.5 rounded-lg hover:bg-ink-50">{label}</a>
           {/each}
           {#if auth.user}
-            <a href="/profile" on:click={() => mobileOpen = false} class="px-3 py-2.5 rounded-lg hover:bg-ink-50">Profil — {auth.user.name}</a>
-            {#if isAdmin}
-              <a href="/admin" on:click={() => mobileOpen = false} class="px-3 py-2.5 rounded-lg bg-app-primary text-app-pfg">Admin Center</a>
-            {:else if auth.user.vendor_id}
-              <a href={auth.user.vendor_status === 'APPROVED' ? '/seller/dashboard' : '/seller/pending'} on:click={() => mobileOpen = false} class="px-3 py-2.5 rounded-lg hover:bg-ink-50">
-                {auth.user.vendor_status === 'APPROVED' ? 'Seller Center' : 'Status Toko'}
-              </a>
-            {:else}
-              <a href="/seller/register" on:click={() => mobileOpen = false} class="px-3 py-2.5 rounded-lg hover:bg-ink-50">Buka Toko</a>
+            {#if !isAdmin}
+              {#if auth.user.vendor_id}
+                <a href={auth.user.vendor_status === 'APPROVED' ? '/seller/dashboard' : '/seller/pending'} on:click={() => mobileOpen = false} class="px-3 py-2.5 rounded-lg hover:bg-ink-50">
+                  {auth.user.vendor_status === 'APPROVED' ? 'Seller Center' : 'Status Toko'}
+                </a>
+              {:else}
+                <a href="/seller/register" on:click={() => mobileOpen = false} class="px-3 py-2.5 rounded-lg hover:bg-ink-50">Buka Toko</a>
+              {/if}
             {/if}
             <button on:click={() => { logout(); mobileOpen = false; }} class="text-left px-3 py-2.5 rounded-lg hover:bg-ink-50 text-red-600">Keluar</button>
           {:else}

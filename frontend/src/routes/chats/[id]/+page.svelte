@@ -16,7 +16,7 @@
   let scroller: HTMLDivElement | null = $state(null);
   let poller: any;
 
-  const id = $derived($page.params.id);
+  const id = $derived($page.params.id ?? '0');
   const isMyThread = $derived(thread && auth.user?.id === thread.user_id); // true = pembeli (user_id punya thread), false = seller (vendor owner)
   // Counterpart untuk header thread
   const counterpart = $derived.by(() => {

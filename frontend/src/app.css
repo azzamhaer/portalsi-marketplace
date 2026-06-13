@@ -82,9 +82,25 @@
   .ring-app-primary  { --tw-ring-color: var(--app-primary); }
   .hover\:bg-app-primary:hover { background-color: var(--app-primary); }
   .hover\:text-app-pfg:hover   { color: var(--app-primary-fg); }
+
+  .loading-bar-run {
+    width: 42%;
+    animation: routeLoading 1.05s ease-in-out infinite;
+  }
+  .loading-bar-done {
+    width: 100%;
+    animation: none;
+    transition: width .24s ease, opacity .24s ease;
+  }
 }
 
 /* xs breakpoint helper */
 @media (min-width: 480px) {
   .xs\:inline { display: inline; }
+}
+
+@keyframes routeLoading {
+  0% { transform: translateX(-105%); width: 32%; }
+  45% { width: 48%; }
+  100% { transform: translateX(245%); width: 38%; }
 }

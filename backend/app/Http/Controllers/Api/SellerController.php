@@ -368,6 +368,7 @@ class SellerController extends Controller
 
     private function syncTags(Product $product, array $rawTags): void
     {
+        $oldIds = $product->tagModels()->pluck('tags.id')->all();
         $ids = [];
         foreach ($rawTags as $raw) {
             $slug = Str::slug(strtolower(trim($raw)));
@@ -377,7 +378,7 @@ class SellerController extends Controller
         }
         $product->tagModels()->sync(array_unique($ids));
         // Update product_count
-        Tag::whereIn('id', $ids)->each(function ($t) {
+        Tag::whereIn('id', array_unique(array_merge($oldIds, $ids)))->each(function ($t) {
             $t->product_count = $t->products()->count();
             $t->save();
         });
