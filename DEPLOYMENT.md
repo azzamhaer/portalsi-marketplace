@@ -316,6 +316,53 @@ Keduanya harus 200.
 
 ## 8. Update Revisi Baru
 
+Cara paling rapi untuk update berikutnya adalah memakai folder source Git terpisah:
+
+```text
+/opt/portalsi-marketplace/source
+```
+
+Folder domain CyberPanel tetap hanya berisi hasil deploy:
+
+```text
+/home/api-marketplace.portalsi.com/public_html
+/home/marketplace.portalsi.com/public_html
+```
+
+Setup pertama:
+
+```bash
+mkdir -p /opt/portalsi-marketplace
+git clone <URL_REPO> /opt/portalsi-marketplace/source
+cd /opt/portalsi-marketplace/source
+chmod +x deploy/*.sh
+```
+
+Deploy semua:
+
+```bash
+cd /opt/portalsi-marketplace/source
+bash deploy/deploy-all.sh
+```
+
+Deploy backend saja:
+
+```bash
+cd /opt/portalsi-marketplace/source
+git pull origin main
+bash deploy/deploy-backend.sh
+```
+
+Deploy frontend saja:
+
+```bash
+cd /opt/portalsi-marketplace/source
+git pull origin main
+bash deploy/deploy-frontend.sh
+```
+
+Script tersedia di folder `deploy/`.
+
 Backend:
 
 ```bash
