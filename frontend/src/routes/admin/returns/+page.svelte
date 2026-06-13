@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { apiEndpoints } from '$lib/api';
-  import { toast } from '$lib/stores.svelte';
+  import { toast, confirmDialog } from '$lib/stores.svelte';
   import { fmtRp } from '$lib/utils';
 
   let returns = $state<any[]>([]);
@@ -15,6 +15,8 @@
   onMount(load);
 
   async function approve(id: number, status: string) {
+    const ok = await confirmDialog.ask({ title: 'Ubah status return?', message: `Status return akan diubah menjadi ${status}.`, confirmText: 'Ubah' });
+    if (!ok) return;
     try { await apiEndpoints.adminApproveReturn(id, status); toast.success('Status diperbarui'); load(); }
     catch (e: any) { toast.error(e.message); }
   }

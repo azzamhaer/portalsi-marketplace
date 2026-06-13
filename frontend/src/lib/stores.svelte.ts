@@ -195,3 +195,50 @@ export const toast = {
   warn:    (msg: string) => toasts.push({ msg, type:'warn' }),
   info:    (msg: string) => toasts.push({ msg, type:'info' })
 };
+
+/* ===== Confirm dialog store ===== */
+function createConfirmStore() {
+  let open = $state(false);
+  let title = $state('Apakah Anda yakin?');
+  let message = $state('');
+  let confirmText = $state('Ya, lanjutkan');
+  let cancelText = $state('Batal');
+  let tone = $state<'default' | 'danger'>('default');
+  let resolver: ((ok: boolean) => void) | null = null;
+
+  function close(ok: boolean) {
+    open = false;
+    resolver?.(ok);
+    resolver = null;
+  }
+
+  return {
+    get open() { return open; },
+    get title() { return title; },
+    get message() { return message; },
+    get confirmText() { return confirmText; },
+    get cancelText() { return cancelText; },
+    get tone() { return tone; },
+    ask(opts: { title?: string; message?: string; confirmText?: string; cancelText?: string; tone?: 'default' | 'danger' } = {}) {
+      title = opts.title ?? 'Apakah Anda yakin?';
+      message = opts.message ?? '';
+      confirmText = opts.confirmText ?? 'Ya, lanjutkan';
+      cancelText = opts.cancelText ?? 'Batal';
+      tone = opts.tone ?? 'default';
+      open = true;
+      return new Promise<boolean>((resolve) => { resolver = resolve; });
+    },
+    confirm() { close(true); },
+    cancel() { close(false); }
+  };
+}
+
+export const confirmDialog = createConfirmStore();
+
+export function loginHref(next?: string, action?: string) {
+  if (!browser) return '/login';
+  const url = new URL('/login', window.location.origin);
+  url.searchParams.set('next', next || window.location.pathname + window.location.search);
+  if (action) url.searchParams.set('action', action);
+  return url.pathname + url.search;
+}

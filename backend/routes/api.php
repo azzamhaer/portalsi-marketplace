@@ -75,6 +75,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     /* Chat */
     Route::get('/chats',                [ChatController::class, 'index']);
+    Route::get('/chats/unread-count',   [ChatController::class, 'unreadCount']);
     Route::get('/chats/{id}',           [ChatController::class, 'show']);
     Route::post('/chats',               [ChatController::class, 'store']);
     Route::post('/chats/{id}/messages', [ChatController::class, 'sendMessage']);
@@ -100,6 +101,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/seller/products/{id}',  [SellerController::class, 'deleteProduct']);
     Route::get('/seller/orders',            [SellerController::class, 'orders']);
     Route::post('/seller/orders/{id}/ship', [SellerController::class, 'shipOrder']);
+    Route::get('/seller/vouchers',          [SellerController::class, 'vouchers']);
+    Route::post('/seller/vouchers',         [SellerController::class, 'storeVoucher']);
+    Route::put('/seller/vouchers/{id}',     [SellerController::class, 'updateVoucher']);
+    Route::delete('/seller/vouchers/{id}',  [SellerController::class, 'deleteVoucher']);
 
     /* Withdraw seller */
     Route::get('/seller/withdraw',          [WithdrawalController::class, 'balance']);

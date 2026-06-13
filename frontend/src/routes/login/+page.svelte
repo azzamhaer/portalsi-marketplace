@@ -6,6 +6,7 @@
 
   let email = $state(''), password = $state(''), loading = $state(false);
   const next = $derived($page.url.searchParams.get('next') || '/');
+  const action = $derived($page.url.searchParams.get('action') || '');
 
   async function submit(e: Event) {
     e.preventDefault();
@@ -14,7 +15,13 @@
       const r: any = await apiEndpoints.login(email, password);
       setToken(r.token); auth.set(r.user);
       toast.success('Selamat datang');
-      goto(next);
+      if (action) {
+        const u = new URL(next, window.location.origin);
+        u.searchParams.set('resume_action', action);
+        goto(u.pathname + u.search);
+      } else {
+        goto(next);
+      }
     } catch (e: any) { toast.error(e.message); } finally { loading = false; }
   }
 </script>

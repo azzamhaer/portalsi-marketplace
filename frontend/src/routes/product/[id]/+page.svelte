@@ -5,9 +5,11 @@
   import { cart, auth, toast, wishlist } from '$lib/stores.svelte';
   import { apiEndpoints } from '$lib/api';
   import { goto } from '$app/navigation';
+  import { page } from '$app/stores';
   import ProductGrid from '$lib/components/ProductGrid.svelte';
   import VendorBadge from '$lib/components/VendorBadge.svelte';
   import ReportButton from '$lib/components/ReportButton.svelte';
+  import { loginHref } from '$lib/stores.svelte';
 
   let { data } = $props();
   const p = $derived(data.product);
@@ -48,6 +50,15 @@
   let myRating = $state(5);
   let myComment = $state('');
   let submittingReview = $state(false);
+  let chatOpen = $state(false);
+  let chatMessage = $state('Hai, apakah barang ini masih tersedia?');
+  let sendingChat = $state(false);
+  const chatTemplates = [
+    'Hai, apakah barang ini masih tersedia?',
+    'Apakah produk ini original dan bergaransi?',
+    'Bisa dikirim hari ini?',
+    'Apakah stok untuk varian yang saya pilih masih ada?'
+  ];
 
   onMount(async () => {
     reviews = p?.reviews ?? [];
@@ -58,6 +69,15 @@
         hasPurchased = r.has_purchased;
         alreadyReviewed = r.already_reviewed;
       } catch {}
+    }
+    const action = $page.url.searchParams.get('resume_action');
+    if (auth.user && action) {
+      const clean = new URL($page.url);
+      clean.searchParams.delete('resume_action');
+      history.replaceState(null, '', clean.pathname + clean.search);
+      if (action === 'cart') addToCart();
+      if (action === 'wishlist') await toggleWish();
+      if (action === 'buy') buyNow();
     }
   });
 
@@ -81,6 +101,7 @@
 
   function addToCart() {
     if (auth.user?.role === 'ADMIN') { toast.warn('Admin tidak bisa berbelanja'); return; }
+    if (!auth.user) { goto(loginHref($page.url.pathname + $page.url.search, 'cart')); return; }
     if (variantNames.length && !allVariantsPicked()) {
       toast.warn('Pilih ' + variantNames.join(' & ') + ' dulu');
       return;
@@ -94,22 +115,28 @@
   }
   function buyNow() {
     if (auth.user?.role === 'ADMIN') { toast.warn('Admin tidak bisa berbelanja'); return; }
+    if (!auth.user) { goto(loginHref($page.url.pathname + $page.url.search, 'buy')); return; }
     addToCart();
-    if (!auth.user) { goto('/login?next=/checkout'); return; }
     goto('/checkout');
   }
   async function toggleWish() {
-    if (!auth.user) { goto('/login'); return; }
+    if (!auth.user) { goto(loginHref($page.url.pathname + $page.url.search, 'wishlist')); return; }
     wishlist.toggle(p.id);
     try { await apiEndpoints.toggleWishlist(p.id); toast.success(inWishlist ? 'Dihapus dari wishlist' : 'Ditambahkan ke wishlist'); }
     catch (e: any) { wishlist.toggle(p.id); toast.error(e.message); }
   }
   async function chatVendor() {
-    if (!auth.user) { goto('/login'); return; }
+    if (!auth.user) { goto(loginHref($page.url.pathname + $page.url.search)); return; }
+    chatOpen = true;
+  }
+  async function sendChatMessage() {
+    if (!chatMessage.trim()) { toast.warn('Pilih atau tulis pesan dulu'); return; }
+    sendingChat = true;
     try {
-      const t: any = await apiEndpoints.startChat(v.id, p.id);
+      const t: any = await apiEndpoints.startChat(v.id, p.id, chatMessage.trim());
       goto(`/chats/${t.id}`);
     } catch (e: any) { toast.error(e.message); }
+    finally { sendingChat = false; }
   }
 </script>
 
@@ -392,5 +419,30 @@
       <span class="absolute bottom-4 left-1/2 -translate-x-1/2 bg-white/10 text-white text-xs px-3 py-1.5 rounded-full">{activeImgIdx + 1} / {images.length}</span>
     {/if}
     <img src={images[activeImgIdx]} alt={p.name} class="max-w-[95vw] max-h-[90vh] object-contain rounded-xl" on:click|stopPropagation />
+  </div>
+{/if}
+
+{#if chatOpen}
+  <div class="fixed inset-0 z-50 grid place-items-end bg-black/50 p-0 backdrop-blur-sm sm:place-items-center sm:p-4" role="dialog" aria-modal="true">
+    <div class="w-full rounded-t-[28px] bg-white p-5 shadow-elevated sm:max-w-md sm:rounded-[28px]">
+      <div class="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <h2 class="text-lg font-bold">Tanyakan ke penjual</h2>
+          <p class="mt-1 text-sm text-ink-500">Pilih template atau tulis pesan sendiri.</p>
+        </div>
+        <button type="button" on:click={() => chatOpen = false} class="grid h-9 w-9 place-items-center rounded-full hover:bg-ink-100"><Icon name="x" size={18} /></button>
+      </div>
+      <div class="mb-3 flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+        {#each chatTemplates as t}
+          <button type="button" on:click={() => chatMessage = t} class="min-w-[210px] rounded-2xl border border-ink-100 bg-ink-50 px-3 py-2 text-left text-xs hover:border-ink-300">
+            {t}
+          </button>
+        {/each}
+      </div>
+      <textarea bind:value={chatMessage} class="input" rows={4} placeholder="Tulis pertanyaan Anda"></textarea>
+      <button type="button" on:click={sendChatMessage} disabled={sendingChat || !chatMessage.trim()} class="btn-primary btn-lg mt-4 w-full">
+        <Icon name="send" size={15} /> {sendingChat ? 'Mengirim...' : 'Kirim pertanyaan'}
+      </button>
+    </div>
   </div>
 {/if}

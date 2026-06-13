@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { apiEndpoints } from '$lib/api';
-  import { toast } from '$lib/stores.svelte';
+  import { toast, confirmDialog } from '$lib/stores.svelte';
   import Icon from '$lib/components/Icon.svelte';
   import VendorBadge from '$lib/components/VendorBadge.svelte';
   import { page as pageStore } from '$app/stores';
@@ -38,11 +38,19 @@
   async function verify(v: any, st: 'APPROVED'|'REJECTED') {
     const note = st === 'REJECTED' ? prompt('Alasan penolakan:') : '';
     if (st === 'REJECTED' && !note) return;
+    const ok = await confirmDialog.ask({
+      title: st === 'APPROVED' ? 'Approve vendor?' : 'Tolak vendor?',
+      message: st === 'APPROVED' ? `Toko "${v.name}" akan bisa mengakses semua fitur seller.` : `Pendaftaran toko "${v.name}" akan ditolak.`,
+      confirmText: st === 'APPROVED' ? 'Approve' : 'Tolak',
+      tone: st === 'APPROVED' ? 'default' : 'danger'
+    });
+    if (!ok) return;
     try { await apiEndpoints.adminVerifyVendor(v.id, st, note ?? ''); toast.success('Status diperbarui'); active = null; load(); }
     catch (e: any) { toast.error(e.message); }
   }
   async function del(v: any) {
-    if (!confirm(`Hapus toko "${v.name}"?`)) return;
+    const ok = await confirmDialog.ask({ title: 'Hapus toko?', message: `Toko "${v.name}" akan dihapus.`, confirmText: 'Hapus', tone: 'danger' });
+    if (!ok) return;
     try { await apiEndpoints.adminDeleteVendor(v.id); toast.success('Dihapus'); load(); }
     catch (e: any) { toast.error(e.message); }
   }

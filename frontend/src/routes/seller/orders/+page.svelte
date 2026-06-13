@@ -4,7 +4,7 @@
   import Icon from '$lib/components/Icon.svelte';
   import { fmtRp, statusPill, ORDER_STATUS_LABEL } from '$lib/utils';
   import { apiEndpoints } from '$lib/api';
-  import { toast } from '$lib/stores.svelte';
+  import { toast, confirmDialog } from '$lib/stores.svelte';
 
   let items = $state<any[]>([]);
   let loading = $state(true);
@@ -17,6 +17,8 @@
   onMount(load);
 
   async function ship(id: number) {
+    const ok = await confirmDialog.ask({ title: 'Kirim pesanan?', message: 'Sistem akan membuat nomor resi dan mengubah status menjadi dikirim.', confirmText: 'Kirim' });
+    if (!ok) return;
     try { const r: any = await apiEndpoints.sellerShipOrder(id); toast.success('Resi: ' + r.tracking_no); load(); }
     catch (e: any) { toast.error(e.message); }
   }

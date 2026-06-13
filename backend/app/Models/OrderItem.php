@@ -9,10 +9,10 @@ class OrderItem extends Model
 {
     protected $fillable = [
         'order_id', 'product_id', 'vendor_id',
-        'product_name', 'product_image', 'price', 'quantity', 'variant_selection'
+        'product_name', 'product_image', 'price', 'quantity', 'variant_selection', 'voucher_code', 'discount'
     ];
 
-    protected $casts = ['price' => 'integer', 'quantity' => 'integer'];
+    protected $casts = ['price' => 'integer', 'quantity' => 'integer', 'discount' => 'integer'];
 
     public function order(): BelongsTo   { return $this->belongsTo(Order::class); }
     public function product(): BelongsTo { return $this->belongsTo(Product::class); }

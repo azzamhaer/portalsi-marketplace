@@ -2,7 +2,7 @@
   import Icon from '$lib/components/Icon.svelte';
   import NotificationBell from '$lib/components/NotificationBell.svelte';
   import { goto } from '$app/navigation';
-  import { auth, cart, settings } from '$lib/stores.svelte';
+  import { auth, cart, settings, wishlist, confirmDialog } from '$lib/stores.svelte';
   import { setToken, apiEndpoints } from '$lib/api';
   import { onMount } from 'svelte';
 
@@ -17,6 +17,8 @@
   let suggestions = $state<{ products: any[]; vendors: any[]; tags: any[] }>({ products: [], vendors: [], tags: [] });
   let suggestLoading = $state(false);
   let suggestTimer: any;
+  let unreadChats = $state(0);
+  let chatPoll: any;
 
   function fetchSuggest(query: string) {
     clearTimeout(suggestTimer);
@@ -51,6 +53,13 @@
   }
 
   async function logout() {
+    const ok = await confirmDialog.ask({
+      title: 'Keluar dari akun?',
+      message: 'Anda perlu login ulang untuk mengakses pesanan, chat, dan seller center.',
+      confirmText: 'Keluar',
+      tone: 'danger'
+    });
+    if (!ok) return;
     try { await apiEndpoints.logout(); } catch {}
     setToken(null);
     auth.clear();
@@ -65,6 +74,12 @@
   }
 
   onMount(() => {
+    async function refreshChatBadge() {
+      if (!auth.user) { unreadChats = 0; return; }
+      try { const r: any = await apiEndpoints.chatsUnreadCount(); unreadChats = r.count ?? 0; } catch {}
+    }
+    refreshChatBadge();
+    chatPoll = setInterval(refreshChatBadge, 30000);
     function onDocClick(e: MouseEvent) {
       if (userOpen && userMenuRef && !userMenuRef.contains(e.target as Node)) {
         userOpen = false;
@@ -81,6 +96,7 @@
     return () => {
       document.removeEventListener('click', onDocClick);
       document.removeEventListener('keydown', onEsc);
+      clearInterval(chatPoll);
     };
   });
 </script>
@@ -160,8 +176,11 @@
 
       <div class="hidden md:flex items-center gap-1 ml-2">
         {#if auth.user?.role !== 'ADMIN'}
-          <a href="/wishlist" class="w-10 h-10 grid place-items-center rounded-full hover:bg-ink-100 transition-colors" aria-label="Wishlist">
+          <a href="/wishlist" class="relative w-10 h-10 grid place-items-center rounded-full hover:bg-ink-100 transition-colors" aria-label="Wishlist">
             <Icon name="heart" size={18} class="text-ink-700" />
+            {#if wishlist.ids.length > 0}
+              <span class="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[10px] font-semibold rounded-full min-w-[18px] h-[18px] grid place-items-center px-1.5">{wishlist.ids.length > 99 ? '99+' : wishlist.ids.length}</span>
+            {/if}
           </a>
           <a href="/cart" class="w-10 h-10 grid place-items-center rounded-full hover:bg-ink-100 transition-colors relative" aria-label="Keranjang">
             <Icon name="shopping-bag" size={18} class="text-ink-700" />
@@ -171,6 +190,14 @@
           </a>
         {/if}
         <NotificationBell />
+        {#if auth.user}
+          <a href="/chats" class="w-10 h-10 grid place-items-center rounded-full hover:bg-ink-100 transition-colors relative" aria-label="Chat">
+            <Icon name="message-circle" size={18} class="text-ink-700" />
+            {#if unreadChats > 0}
+              <span class="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[10px] font-semibold rounded-full min-w-[18px] h-[18px] grid place-items-center px-1.5">{unreadChats > 99 ? '99+' : unreadChats}</span>
+            {/if}
+          </a>
+        {/if}
         {#if auth.user}
           <div class="relative" bind:this={userMenuRef}>
             <button type="button" on:click|stopPropagation={() => userOpen = !userOpen} class="w-10 h-10 grid place-items-center rounded-full hover:bg-ink-100 transition-colors" aria-label="Akun" aria-expanded={userOpen}>

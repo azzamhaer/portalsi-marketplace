@@ -2,7 +2,7 @@
   import Icon from '$lib/components/Icon.svelte';
   import LoginRequired from '$lib/components/LoginRequired.svelte';
   import AdminBlock from '$lib/components/AdminBlock.svelte';
-  import { cart, auth, toast } from '$lib/stores.svelte';
+  import { cart, auth, toast, confirmDialog } from '$lib/stores.svelte';
   import { fmtRp } from '$lib/utils';
   import { goto } from '$app/navigation';
 
@@ -18,6 +18,14 @@
     if (!cart.items.some(i => i.checked)) { toast.warn('Pilih minimal 1 produk'); return; }
     if (!auth.user) { goto('/login?next=/checkout'); return; }
     goto('/checkout');
+  }
+  async function clearSelected() {
+    const ok = await confirmDialog.ask({ title: 'Hapus item terpilih?', message: 'Produk yang dicentang akan dihapus dari keranjang.', confirmText: 'Hapus', tone: 'danger' });
+    if (ok) cart.clearChecked();
+  }
+  async function removeItem(id: number) {
+    const ok = await confirmDialog.ask({ title: 'Hapus produk?', message: 'Produk ini akan dihapus dari keranjang.', confirmText: 'Hapus', tone: 'danger' });
+    if (ok) cart.remove(id);
   }
 </script>
 
@@ -50,7 +58,7 @@
             <input type="checkbox" checked={cart.items.every(i => i.checked)} on:change={(e: any) => cart.checkAll(e.target.checked)} />
             <span>Pilih Semua ({cart.items.length})</span>
           </label>
-          <button on:click={() => { if (confirm('Hapus item terpilih?')) cart.clearChecked(); }} class="text-xs text-red-600 hover:underline flex items-center gap-1">
+          <button on:click={clearSelected} class="text-xs text-red-600 hover:underline flex items-center gap-1">
             <Icon name="trash-2" size={14} /> Hapus
           </button>
         </div>
@@ -77,7 +85,7 @@
                       <span class="w-8 text-center text-sm">{it.qty}</span>
                       <button on:click={() => cart.update(it.product_id, it.qty + 1)} class="w-7 h-7 grid place-items-center"><Icon name="plus" size={12} /></button>
                     </div>
-                    <button on:click={() => cart.remove(it.product_id)} class="ml-auto w-8 h-8 grid place-items-center text-red-600 hover:bg-red-50 rounded-full"><Icon name="trash-2" size={14} /></button>
+                    <button on:click={() => removeItem(it.product_id)} class="ml-auto w-8 h-8 grid place-items-center text-red-600 hover:bg-red-50 rounded-full"><Icon name="trash-2" size={14} /></button>
                   </div>
                 </div>
                 <div class="hidden sm:inline-flex items-center border border-ink-200 rounded-full">
@@ -85,7 +93,7 @@
                   <span class="w-9 text-center text-sm">{it.qty}</span>
                   <button on:click={() => cart.update(it.product_id, it.qty + 1)} class="w-8 h-8 grid place-items-center hover:bg-ink-50 rounded-r-full"><Icon name="plus" size={12} /></button>
                 </div>
-                <button on:click={() => cart.remove(it.product_id)} class="hidden sm:grid w-8 h-8 place-items-center text-red-600 hover:bg-red-50 rounded-full">
+                <button on:click={() => removeItem(it.product_id)} class="hidden sm:grid w-8 h-8 place-items-center text-red-600 hover:bg-red-50 rounded-full">
                   <Icon name="trash-2" size={14} />
                 </button>
               </div>

@@ -108,6 +108,10 @@ export const apiEndpoints = {
   sellerDeleteProduct: (id: number) => api(`/seller/products/${id}`, { method: 'DELETE' }),
   sellerOrders:     ()         => api('/seller/orders'),
   sellerShipOrder:  (id: number) => api(`/seller/orders/${id}/ship`, { method: 'POST' }),
+  sellerVouchers:   ()         => api('/seller/vouchers'),
+  sellerCreateVoucher: (b: any)=> api('/seller/vouchers', { method: 'POST', body: b }),
+  sellerUpdateVoucher: (id: number, b: any) => api(`/seller/vouchers/${id}`, { method: 'PUT', body: b }),
+  sellerDeleteVoucher: (id: number) => api(`/seller/vouchers/${id}`, { method: 'DELETE' }),
   sellerUpdateProfile:(b: any) => api('/seller/profile', { method: 'PUT', body: b }),
   sellerUpdateUsername:(username: string) => api('/seller/username', { method: 'POST', body: { username } as any }),
   sellerDismissWarning:() => api('/seller/dismiss-warning', { method: 'POST' }),
@@ -135,8 +139,9 @@ export const apiEndpoints = {
 
   /* chat */
   chats:       () => api('/chats'),
+  chatsUnreadCount: () => api('/chats/unread-count'),
   chatThread:  (id: number) => api(`/chats/${id}`),
-  startChat:   (vendor_id: number, product_id?: number) => api('/chats', { method: 'POST', body: { vendor_id, product_id } as any }),
+  startChat:   (vendor_id: number, product_id?: number, message?: string) => api('/chats', { method: 'POST', body: { vendor_id, product_id, message } as any }),
   sendMessage: (thread_id: number, message: string, image_url?: string | null) => api(`/chats/${thread_id}/messages`, { method: 'POST', body: { message, image_url } as any }),
 
   /* withdraw seller */

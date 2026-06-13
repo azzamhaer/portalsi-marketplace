@@ -7,6 +7,7 @@ use App\Models\Address;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\Product;
+use App\Models\SellerVoucher;
 use App\Services\TripayService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -39,6 +40,7 @@ class OrderController extends Controller
             'items.*.product_id'        => 'required|exists:products,id',
             'items.*.qty'               => 'required|integer|min:1',
             'items.*.variant_selection' => 'nullable|string|max:500',
+            'items.*.voucher_code'      => 'nullable|string|max:30',
             'recipient'          => 'required|string|max:255',
             'phone'              => 'required|string|max:20',
             'city'               => 'required|string|max:255',
@@ -67,19 +69,26 @@ class OrderController extends Controller
             }
 
             $subtotal = 0;
+            $discountTotal = 0;
             $itemsForTripay = [];
             $itemsForDb = [];
             foreach ($data['items'] as $it) {
                 $p = $products->get($it['product_id']);
                 if (!$p) abort(422, 'Produk tidak ditemukan');
                 if ($it['qty'] > $p->stock) abort(422, "Stok {$p->name} hanya {$p->stock}");
-                $subtotal += $p->price * $it['qty'];
-                $itemsForTripay[] = [
-                    'sku'      => (string) $p->id,
-                    'name'     => mb_substr($p->name, 0, 60),
-                    'price'    => $p->price,
-                    'quantity' => $it['qty'],
-                ];
+                $lineSubtotal = $p->price * $it['qty'];
+                $lineDiscount = 0;
+                $voucherCode = !empty($it['voucher_code']) ? strtoupper(trim($it['voucher_code'])) : null;
+                if ($voucherCode) {
+                    $voucher = SellerVoucher::where('vendor_id', $p->vendor_id)->where('code', $voucherCode)->first();
+                    if (!$voucher || !$voucher->isUsableFor($p, $lineSubtotal)) {
+                        abort(422, "Voucher {$voucherCode} tidak valid untuk {$p->name}");
+                    }
+                    $lineDiscount = $voucher->discountFor($lineSubtotal);
+                    $voucher->increment('used_count');
+                }
+                $subtotal += $lineSubtotal;
+                $discountTotal += $lineDiscount;
                 $itemsForDb[] = [
                     'product_id'        => $p->id,
                     'vendor_id'         => $p->vendor_id,
@@ -88,16 +97,20 @@ class OrderController extends Controller
                     'price'             => $p->price,
                     'quantity'          => $it['qty'],
                     'variant_selection' => $it['variant_selection'] ?? null,
+                    'voucher_code'      => $voucherCode,
+                    'discount'          => $lineDiscount,
                 ];
             }
 
             $shipping  = (int) $data['courier_cost'];
-            $insurance = $subtotal > 500_000 ? (int) round($subtotal * 0.002) : 0;
-            $baseTotal = $subtotal + $shipping + $insurance;
+            $discountedSubtotal = max(0, $subtotal - $discountTotal);
+            $insurance = $discountedSubtotal > 500_000 ? (int) round($discountedSubtotal * 0.002) : 0;
+            $baseTotal = $discountedSubtotal + $shipping + $insurance;
             $fee       = $this->tripay->calcFee($method, $baseTotal);
             $grand     = $baseTotal + $fee;
 
             // Tripay validation: sum(items.price * qty) === amount
+            $itemsForTripay[] = ['sku'=>'PRODUCTS', 'name'=>'Belanja Marketplace', 'price'=>$discountedSubtotal, 'quantity'=>1];
             if ($shipping  > 0) $itemsForTripay[] = ['sku'=>'SHIPPING', 'name'=>"Ongkir ({$data['courier_name']})", 'price'=>$shipping,  'quantity'=>1];
             if ($insurance > 0) $itemsForTripay[] = ['sku'=>'INSURANCE','name'=>'Asuransi Pengiriman',                'price'=>$insurance, 'quantity'=>1];
 

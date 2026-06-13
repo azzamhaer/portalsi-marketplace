@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { apiEndpoints } from '$lib/api';
-  import { auth, toast } from '$lib/stores.svelte';
+  import { auth, toast, confirmDialog } from '$lib/stores.svelte';
   import LoginRequired from '$lib/components/LoginRequired.svelte';
   import Icon from '$lib/components/Icon.svelte';
   import { goto } from '$app/navigation';
@@ -19,19 +19,25 @@
       meta = r;
     } finally { loading = false; }
   }
-  onMount(() => { if (auth.user) load(); });
-
-  $effect(() => { if (auth.user && !loading) load(); });
+  onMount(() => { if (auth.user) load(); else loading = false; });
 
   async function markAll() {
+    const ok = await confirmDialog.ask({ title: 'Tandai semua dibaca?', message: 'Semua notifikasi yang belum dibaca akan ditandai sudah dibaca.' });
+    if (!ok) return;
     try { await apiEndpoints.notificationsReadAll(); toast.success('Semua ditandai sudah dibaca'); load(); }
     catch (e: any) { toast.error(e.message); }
   }
   async function del(id: number) {
+    const ok = await confirmDialog.ask({ title: 'Hapus notifikasi?', message: 'Notifikasi ini akan dihapus dari daftar Anda.', confirmText: 'Hapus', tone: 'danger' });
+    if (!ok) return;
     try { await apiEndpoints.notificationDelete(id); load(); }
     catch (e: any) { toast.error(e.message); }
   }
   async function pick(n: any) {
+    if (!n.read_at) {
+      const ok = await confirmDialog.ask({ title: 'Buka notifikasi?', message: 'Notifikasi akan ditandai sudah dibaca lalu membuka detail.' });
+      if (!ok) return;
+    }
     try { await apiEndpoints.notificationMarkRead(n.id); } catch {}
     if (n.action_url) goto(n.action_url);
   }

@@ -1,7 +1,7 @@
 <script lang="ts">
   import Icon from '$lib/components/Icon.svelte';
   import { fmtRp, statusPill, ORDER_STATUS_LABEL } from '$lib/utils';
-  import { toast } from '$lib/stores.svelte';
+  import { toast, confirmDialog } from '$lib/stores.svelte';
   import { apiEndpoints } from '$lib/api';
   import { invalidateAll } from '$app/navigation';
   import { onMount, onDestroy } from 'svelte';
@@ -42,6 +42,8 @@
     catch (e: any) { toast.error(e.message); } finally { busy = false; }
   }
   async function markDone() {
+    const ok = await confirmDialog.ask({ title: 'Pesanan sudah diterima?', message: 'Status pesanan akan berubah menjadi selesai.', confirmText: 'Sudah diterima' });
+    if (!ok) return;
     busy = true;
     try { await apiEndpoints.markOrderDone(order.id); toast.success('Pesanan selesai'); await invalidateAll(); }
     catch (e: any) { toast.error(e.message); } finally { busy = false; }
@@ -50,6 +52,8 @@
   let showReturn = $state(false);
   async function requestReturn() {
     if (!returnReason.trim()) { toast.warn('Tulis alasan'); return; }
+    const ok = await confirmDialog.ask({ title: 'Ajukan pengembalian?', message: 'Permintaan return akan dikirim ke admin untuk ditinjau.', confirmText: 'Kirim return' });
+    if (!ok) return;
     busy = true;
     try { await apiEndpoints.requestReturn(order.id, returnReason); toast.success('Permintaan return dikirim'); showReturn = false; }
     catch (e: any) { toast.error(e.message); } finally { busy = false; }

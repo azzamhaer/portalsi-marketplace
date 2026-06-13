@@ -22,6 +22,11 @@
     is_active: true,
     featured_home: true,
   });
+  const iconPresets = [
+    'smartphone', 'shirt', 'watch', 'laptop', 'headphones', 'gamepad-2',
+    'baby', 'home', 'sofa', 'car', 'bike', 'book-open', 'sparkles',
+    'utensils', 'pill', 'dumbbell', 'camera', 'gift', 'shopping-bag', 'tag'
+  ];
 
   const flatCategories = $derived(categories.flatMap((c) => [c, ...(c.children ?? [])]));
 
@@ -179,9 +184,19 @@
               </datalist>
               <p class="helper">Klik kategori akan membuka produk dengan tag ini.</p>
             </div>
-            <div class="grid grid-cols-2 gap-2">
-              <div><label class="label">Icon lucide</label><input bind:value={categoryForm.icon} class="input" placeholder="smartphone" /></div>
-              <div><label class="label">Urutan</label><input type="number" bind:value={categoryForm.sort_order} class="input" /></div>
+            <div>
+              <label class="label">Icon kategori</label>
+              <div class="grid grid-cols-5 gap-2">
+                {#each iconPresets as icon}
+                  <button type="button" on:click={() => categoryForm.icon = icon} class="grid h-10 place-items-center rounded-xl border transition" class:border-ink-950={categoryForm.icon === icon} class:bg-ink-50={categoryForm.icon === icon} class:border-ink-100={categoryForm.icon !== icon} title={icon}>
+                    <Icon name={icon} size={17} />
+                  </button>
+                {/each}
+              </div>
+              <input bind:value={categoryForm.icon} class="input input-sm mt-2" placeholder="custom lucide icon, contoh: smartphone" />
+            </div>
+            <div>
+              <label class="label">Urutan</label><input type="number" bind:value={categoryForm.sort_order} class="input" />
             </div>
             <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={categoryForm.is_active} /> Aktif</label>
             <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={categoryForm.featured_home} /> Tampilkan di homepage</label>

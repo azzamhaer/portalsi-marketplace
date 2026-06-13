@@ -1,6 +1,6 @@
 <script lang="ts">
   import Icon from '$lib/components/Icon.svelte';
-  import { cart, auth, toast } from '$lib/stores.svelte';
+  import { cart, auth, toast, confirmDialog } from '$lib/stores.svelte';
   import { apiEndpoints } from '$lib/api';
   import { fmtRp } from '$lib/utils';
   import { goto } from '$app/navigation';
@@ -26,6 +26,7 @@
   let courier = $state(COURIERS[0]);
   let pay = $state<string | null>(null);
   let loading = $state(false);
+  let voucherCodes = $state<Record<number, string>>({});
 
   const items = $derived(cart.checkedItems);
   const subtotal = $derived(cart.subtotal);
@@ -52,10 +53,17 @@
   async function submit() {
     if (!recipient || !phone || !full) { toast.warn('Lengkapi alamat'); return; }
     if (!pay) { toast.warn('Pilih metode pembayaran'); return; }
+    const ok = await confirmDialog.ask({ title: 'Buat pesanan?', message: 'Pesanan akan dibuat dan stok produk akan dikurangi.', confirmText: 'Buat pesanan' });
+    if (!ok) return;
     loading = true;
     try {
       const res: any = await apiEndpoints.checkout({
-        items: items.map(i => ({ product_id: i.product_id, qty: i.qty, variant_selection: i.variant_selection ?? null })),
+        items: items.map(i => ({
+          product_id: i.product_id,
+          qty: i.qty,
+          variant_selection: i.variant_selection ?? null,
+          voucher_code: voucherCodes[i.product_id]?.trim() || null,
+        })),
         recipient, phone, city, full_address: full, notes,
         courier_name: courier.name, courier_eta: courier.eta, courier_cost: courier.cost,
         payment_method: pay,
@@ -130,6 +138,11 @@
             <div class="flex-1 min-w-0">
               <div class="text-sm font-medium line-clamp-1">{it.name}</div>
               <div class="text-xs text-ink-500">{it.qty} × {fmtRp(it.price)}</div>
+              <input
+                class="input input-sm mt-2 max-w-xs !py-1.5 uppercase"
+                placeholder="Kode voucher seller"
+                bind:value={voucherCodes[it.product_id]}
+              />
             </div>
             <b class="text-sm">{fmtRp(it.price * it.qty)}</b>
           </div>

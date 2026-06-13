@@ -15,10 +15,11 @@ class ChatController extends Controller
     {
         $user = $request->user();
         $vendor = $user->vendor;
-        $threads = ChatThread::where('user_id', $user->id)
-            ->orWhere(function ($q) use ($vendor) {
-                if ($vendor) $q->where('vendor_id', $vendor->id);
+        $threads = ChatThread::where(function ($q) use ($user, $vendor) {
+                $q->where('user_id', $user->id);
+                if ($vendor) $q->orWhere('vendor_id', $vendor->id);
             })
+            ->whereHas('messages')
             ->with(['vendor:id,name,avatar', 'user:id,name', 'product:id,name,image', 'messages' => fn($q) => $q->latest()->limit(1)])
             ->orderByDesc('last_message_at')
             ->get();
@@ -38,11 +39,37 @@ class ChatController extends Controller
         return response()->json($thread);
     }
 
+    public function unreadCount(Request $request)
+    {
+        $user = $request->user();
+        $vendor = $user->vendor;
+        $buyerThreadIds = ChatThread::where('user_id', $user->id)->pluck('id');
+        $sellerThreadIds = $vendor ? ChatThread::where('vendor_id', $vendor->id)->pluck('id') : collect();
+
+        if ($buyerThreadIds->isEmpty() && $sellerThreadIds->isEmpty()) {
+            return response()->json(['count' => 0]);
+        }
+
+        $count = ChatMessage::where('is_read', false)
+            ->where(function ($q) use ($buyerThreadIds, $sellerThreadIds) {
+                if ($buyerThreadIds->isNotEmpty()) {
+                    $q->orWhere(fn($w) => $w->whereIn('thread_id', $buyerThreadIds)->where('sender_type', 'SELLER'));
+                }
+                if ($sellerThreadIds->isNotEmpty()) {
+                    $q->orWhere(fn($w) => $w->whereIn('thread_id', $sellerThreadIds)->where('sender_type', 'BUYER'));
+                }
+            })
+            ->count();
+
+        return response()->json(['count' => $count]);
+    }
+
     public function store(Request $request)
     {
         $data = $request->validate([
             'vendor_id' => 'required|exists:vendors,id',
             'product_id' => 'nullable|exists:products,id',
+            'message' => 'nullable|string|max:2000',
         ]);
         $vendor = Vendor::findOrFail($data['vendor_id']);
         if ($vendor->user_id === $request->user()->id) {
@@ -53,11 +80,20 @@ class ChatController extends Controller
         }
         $thread = ChatThread::firstOrCreate(
             ['user_id' => $request->user()->id, 'vendor_id' => $vendor->id],
-            ['product_id' => $data['product_id'] ?? null, 'last_message_at' => now()]
+            ['product_id' => $data['product_id'] ?? null, 'last_message_at' => null]
         );
         if (!empty($data['product_id'])) {
             $thread->product_id = $data['product_id'];
             $thread->save();
+        }
+        if (!empty($data['message'])) {
+            ChatMessage::create([
+                'thread_id' => $thread->id,
+                'sender_user_id' => $request->user()->id,
+                'sender_type' => 'BUYER',
+                'message' => $data['message'],
+            ]);
+            $thread->update(['last_message_at' => now()]);
         }
         return response()->json($thread);
     }

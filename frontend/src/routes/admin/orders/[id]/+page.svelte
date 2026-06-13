@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { apiEndpoints } from '$lib/api';
-  import { toast } from '$lib/stores.svelte';
+  import { toast, confirmDialog } from '$lib/stores.svelte';
   import { page } from '$app/stores';
   import Icon from '$lib/components/Icon.svelte';
   import { fmtRp, statusPill, ORDER_STATUS_LABEL } from '$lib/utils';
@@ -22,6 +22,8 @@
   });
 
   async function save() {
+    const ok = await confirmDialog.ask({ title: 'Simpan perubahan order?', message: `Status akan diubah menjadi ${newStatus}.`, confirmText: 'Simpan' });
+    if (!ok) return;
     saving = true;
     try {
       await apiEndpoints.adminUpdateOrder(order.id, { status: newStatus, tracking_no: trackingNo || null });

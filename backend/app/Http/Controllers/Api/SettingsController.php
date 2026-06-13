@@ -91,7 +91,7 @@ class SettingsController extends Controller
             'primary_color' => 'sometimes|string',
             'primary_fg'    => 'sometimes|string',
             'accent_color'  => 'sometimes|string',
-            'tagline'       => 'sometimes|string|max:200',
+            'tagline'       => 'sometimes|nullable|string|max:200',
             'tripay_mode'   => 'sometimes|in:sandbox,production',
             'tripay_api_key'=> 'sometimes|string',
             'tripay_private_key' => 'sometimes|string',

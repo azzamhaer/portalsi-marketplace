@@ -8,10 +8,27 @@
 
   let threads = $state<any[]>([]);
   let loading = $state(true);
+  let error = $state('');
 
-  onMount(async () => {
-    if (!getToken()) { goto('/login?next=/chats'); return; }
-    try { threads = await apiEndpoints.chats(); } finally { loading = false; }
+  async function load() {
+    loading = true;
+    error = '';
+    try {
+      threads = await apiEndpoints.chats();
+    } catch (e: any) {
+      error = e?.message || 'Gagal memuat chat.';
+    } finally {
+      loading = false;
+    }
+  }
+
+  onMount(() => {
+    if (!getToken()) {
+      loading = false;
+      goto('/login?next=/chats');
+      return;
+    }
+    load();
   });
 </script>
 
@@ -20,7 +37,15 @@
 <div class="container-x py-6 sm:py-8">
   <h1 class="section-title mb-6 sm:mb-8">Chat</h1>
 
-  {#if loading}<div class="card text-center text-ink-500 py-10">Memuat…</div>
+  {#if loading}
+    <div class="card text-center text-ink-500 py-10">Memuat...</div>
+  {:else if error}
+    <div class="card text-center py-12">
+      <Icon name="message-circle-warning" size={42} class="mx-auto text-amber-500 mb-3" />
+      <h3 class="font-semibold mb-1">Chat belum bisa dimuat</h3>
+      <p class="text-sm text-ink-500 mb-4">{error}</p>
+      <button type="button" on:click={load} class="btn-outline btn-sm">Coba lagi</button>
+    </div>
   {:else if threads.length === 0}
     <div class="card text-center py-16">
       <Icon name="message-circle" size={48} class="mx-auto text-ink-300 mb-3" />
@@ -39,7 +64,12 @@
               <div class="font-semibold text-sm truncate">{isMyThread ? t.vendor?.name : t.user?.name}</div>
               {#if t.last_message_at}<small class="text-xs text-ink-500 shrink-0">{timeAgo(t.last_message_at)}</small>{/if}
             </div>
-            {#if t.product}<div class="text-xs text-ink-500 truncate">📦 {t.product.name}</div>{/if}
+            {#if t.product}
+              <div class="text-xs text-ink-500 truncate flex items-center gap-1 mt-0.5">
+                <Icon name="package" size={12} />
+                <span>{t.product.name}</span>
+              </div>
+            {/if}
             {#if last}<div class="text-sm text-ink-600 truncate mt-0.5">{last.message}</div>{/if}
           </div>
         </a>

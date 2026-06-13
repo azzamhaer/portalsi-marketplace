@@ -1,6 +1,7 @@
 <script lang="ts">
   import Hero from '$lib/components/Hero.svelte';
   import HomeCategoryNav from '$lib/components/HomeCategoryNav.svelte';
+  import SmartSearch from '$lib/components/SmartSearch.svelte';
   import ProductGrid from '$lib/components/ProductGrid.svelte';
   import ProductGridSkeleton from '$lib/components/ProductGridSkeleton.svelte';
   import Icon from '$lib/components/Icon.svelte';
@@ -29,6 +30,10 @@
       <ProductGridSkeleton count={12} />
     </section>
   {:then home}
+    <section class="mx-auto max-w-3xl">
+      <SmartSearch placeholder="Cari produk, toko, brand, atau tag" />
+    </section>
+
     <HomeCategoryNav categories={home.categories ?? []} />
 
     {#if home.flashSale?.length}

@@ -3,7 +3,7 @@
   import { fmtRp, calcDiscount } from '$lib/utils';
   import { wishlist } from '$lib/stores.svelte';
   import { apiEndpoints } from '$lib/api';
-  import { auth, toast } from '$lib/stores.svelte';
+  import { auth, toast, loginHref } from '$lib/stores.svelte';
   import { goto } from '$app/navigation';
   let { product } = $props<{ product: any }>();
   const disc = $derived(calcDiscount(product.price, product.original_price));
@@ -11,7 +11,7 @@
 
   async function toggleWish(e: Event) {
     e.preventDefault(); e.stopPropagation();
-    if (!auth.user) { goto('/login?next=/'); return; }
+    if (!auth.user) { goto(loginHref(`/product/${product.slug || product.id}`, 'wishlist')); return; }
     const wasIn = inWishlist;
     wishlist.toggle(product.id);
     try { await apiEndpoints.toggleWishlist(product.id); }

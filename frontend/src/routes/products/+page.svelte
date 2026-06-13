@@ -3,9 +3,12 @@
   import ProductGridSkeleton from '$lib/components/ProductGridSkeleton.svelte';
   import Pagination from '$lib/components/Pagination.svelte';
   import ProductFilterPanel from '$lib/components/ProductFilterPanel.svelte';
+  import SmartSearch from '$lib/components/SmartSearch.svelte';
+  import Icon from '$lib/components/Icon.svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   let { data } = $props();
+  let filtersOpen = $state(false);
 
   function setSort(v: string) {
     const u = new URL($page.url);
@@ -23,6 +26,10 @@
 <svelte:head><title>Semua Produk</title></svelte:head>
 
 <div class="container-x py-6 sm:py-8">
+  <div class="mb-6 max-w-3xl">
+    <SmartSearch placeholder="Cari produk di katalog" />
+  </div>
+
   <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6 sm:mb-8">
     <div>
       <div class="section-eyebrow mb-2">Katalog</div>
@@ -63,13 +70,19 @@
 
   <div class="grid gap-8 lg:grid-cols-[270px_1fr]">
     <div class="lg:sticky lg:top-24 lg:h-fit">
+      <button type="button" on:click={() => filtersOpen = !filtersOpen} class="mb-3 flex w-full items-center justify-between rounded-2xl border border-ink-100 bg-white px-4 py-3 text-sm font-semibold shadow-soft lg:hidden">
+        <span class="flex items-center gap-2"><Icon name="sliders-horizontal" size={16} /> Filter produk</span>
+        <Icon name={filtersOpen ? 'chevron-up' : 'chevron-down'} size={16} />
+      </button>
       {#await data.streamed.filters}
-        <div class="rounded-2xl border border-ink-100 bg-white p-4">
+        <div class="{filtersOpen ? 'block' : 'hidden'} rounded-2xl border border-ink-100 bg-white p-4 lg:block">
           <div class="h-5 w-28 bg-ink-100 rounded animate-pulse mb-4"></div>
           <div class="space-y-3">{#each Array(6) as _}<div class="h-10 bg-ink-100 rounded-xl animate-pulse"></div>{/each}</div>
         </div>
       {:then filters}
-        <ProductFilterPanel tags={filters.tags} categories={filters.categories} />
+        <div class="{filtersOpen ? 'block' : 'hidden'} lg:block">
+          <ProductFilterPanel tags={filters.tags} categories={filters.categories} />
+        </div>
       {/await}
     </div>
 

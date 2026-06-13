@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
+use App\Models\SellerVoucher;
 use App\Models\Tag;
 use App\Models\Vendor;
 use App\Support\ReservedUsernames;
@@ -226,6 +227,58 @@ class SellerController extends Controller
         );
     }
 
+    public function vouchers(Request $request)
+    {
+        $vendor = $this->requireApprovedVendor($request);
+        return response()->json(
+            SellerVoucher::where('vendor_id', $vendor->id)
+                ->with('products:id,name,image,price')
+                ->orderByDesc('id')
+                ->get()
+        );
+    }
+
+    public function storeVoucher(Request $request)
+    {
+        $vendor = $this->requireApprovedVendor($request);
+        $data = $this->validateVoucher($request);
+        $productIds = $data['product_ids'] ?? [];
+        unset($data['product_ids']);
+        $data['vendor_id'] = $vendor->id;
+        $data['code'] = strtoupper(trim($data['code']));
+
+        if (SellerVoucher::where('vendor_id', $vendor->id)->where('code', $data['code'])->exists()) {
+            return response()->json(['message' => 'Kode voucher sudah dipakai'], 422);
+        }
+
+        $voucher = SellerVoucher::create($data);
+        $this->syncVoucherProducts($voucher, $vendor->id, $productIds);
+        return response()->json($voucher->load('products:id,name,image,price'), 201);
+    }
+
+    public function updateVoucher(Request $request, $id)
+    {
+        $vendor = $this->requireApprovedVendor($request);
+        $voucher = SellerVoucher::where('vendor_id', $vendor->id)->findOrFail($id);
+        $data = $this->validateVoucher($request, true);
+        $productIds = $data['product_ids'] ?? null;
+        unset($data['product_ids']);
+        if (isset($data['code'])) $data['code'] = strtoupper(trim($data['code']));
+        if (isset($data['code']) && SellerVoucher::where('vendor_id', $vendor->id)->where('code', $data['code'])->where('id', '!=', $voucher->id)->exists()) {
+            return response()->json(['message' => 'Kode voucher sudah dipakai'], 422);
+        }
+        $voucher->update($data);
+        if ($productIds !== null) $this->syncVoucherProducts($voucher, $vendor->id, $productIds);
+        return response()->json($voucher->load('products:id,name,image,price'));
+    }
+
+    public function deleteVoucher(Request $request, $id)
+    {
+        $vendor = $this->requireApprovedVendor($request);
+        SellerVoucher::where('vendor_id', $vendor->id)->findOrFail($id)->delete();
+        return response()->json(['ok' => true]);
+    }
+
     public function shipOrder(Request $request, $id)
     {
         $vendor = $this->requireApprovedVendor($request);
@@ -338,6 +391,30 @@ class SellerController extends Controller
             abort(403, 'Toko belum terverifikasi');
         }
         return $vendor;
+    }
+
+    private function validateVoucher(Request $request, bool $partial = false): array
+    {
+        $sometimes = $partial ? 'sometimes|' : '';
+        return $request->validate([
+            'code' => $sometimes . 'required|string|max:30|regex:/^[A-Za-z0-9_-]+$/',
+            'type' => $sometimes . 'required|in:FIXED,PERCENT',
+            'value' => $sometimes . 'required|integer|min:1',
+            'min_subtotal' => 'sometimes|integer|min:0',
+            'max_discount' => 'nullable|integer|min:0',
+            'usage_limit' => 'nullable|integer|min:1',
+            'is_active' => 'sometimes|boolean',
+            'starts_at' => 'nullable|date',
+            'ends_at' => 'nullable|date|after_or_equal:starts_at',
+            'product_ids' => 'sometimes|array',
+            'product_ids.*' => 'integer|exists:products,id',
+        ]);
+    }
+
+    private function syncVoucherProducts(SellerVoucher $voucher, int $vendorId, array $productIds): void
+    {
+        $validIds = Product::where('vendor_id', $vendorId)->whereIn('id', $productIds)->pluck('id')->all();
+        $voucher->products()->sync($validIds);
     }
 
     private function makeProductSlug(string $name): string

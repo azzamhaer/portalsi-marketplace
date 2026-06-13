@@ -5,6 +5,7 @@
   import Toaster from '$lib/components/Toaster.svelte';
   import GlobalLoadingBar from '$lib/components/GlobalLoadingBar.svelte';
   import MobileBottomBar from '$lib/components/MobileBottomBar.svelte';
+  import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
   import EmailVerificationGate from '$lib/components/EmailVerificationGate.svelte';
   import { onMount } from 'svelte';
   import { auth, settings, wishlist, applyPalette } from '$lib/stores.svelte';
@@ -87,5 +88,6 @@
   </main>
   <Footer />
   <MobileBottomBar />
+  <ConfirmDialog />
   <Toaster />
 </div>
