@@ -1,7 +1,7 @@
 <script lang="ts">
   import Icon from '$lib/components/Icon.svelte';
   import NotificationBell from '$lib/components/NotificationBell.svelte';
-  import { goto } from '$app/navigation';
+  import { afterNavigate, goto } from '$app/navigation';
   import { auth, cart, settings, wishlist, confirmDialog } from '$lib/stores.svelte';
   import { setToken, apiEndpoints } from '$lib/api';
   import { onMount } from 'svelte';
@@ -18,6 +18,7 @@
   let suggestLoading = $state(false);
   let suggestTimer: any;
   let unreadChats = $state(0);
+  let activeOrders = $state(0);
   let chatPoll: any;
 
   function fetchSuggest(query: string) {
@@ -73,13 +74,42 @@
     goto(href);
   }
 
+  function badgeText(value: number) {
+    return value > 99 ? '99+' : String(value);
+  }
+
+  function mobileBadge(label: string) {
+    if (label === 'Keranjang') return cart.count;
+    if (label === 'Wishlist') return wishlist.ids.length;
+    if (label === 'Chat') return unreadChats;
+    if (label === 'Pesanan') return activeOrders;
+    return 0;
+  }
+
+  function authedHref(href: string) {
+    return auth.user ? href : `/login?next=${encodeURIComponent(href)}`;
+  }
+
+  afterNavigate(() => {
+    mobileOpen = false;
+    userOpen = false;
+    suggestOpen = false;
+  });
+
   onMount(() => {
-    async function refreshChatBadge() {
-      if (!auth.user) { unreadChats = 0; return; }
-      try { const r: any = await apiEndpoints.chatsUnreadCount(); unreadChats = r.count ?? 0; } catch {}
+    async function refreshHeaderBadges() {
+      if (!auth.user) { unreadChats = 0; activeOrders = 0; return; }
+      try {
+        const [chat, orders]: any[] = await Promise.all([
+          apiEndpoints.chatsUnreadCount().catch(() => ({ count: 0 })),
+          apiEndpoints.ordersActiveCount().catch(() => ({ count: 0 })),
+        ]);
+        unreadChats = chat.count ?? 0;
+        activeOrders = orders.count ?? 0;
+      } catch {}
     }
-    refreshChatBadge();
-    chatPoll = setInterval(refreshChatBadge, 30000);
+    refreshHeaderBadges();
+    chatPoll = setInterval(refreshHeaderBadges, 30000);
     function onDocClick(e: MouseEvent) {
       if (userOpen && userMenuRef && !userMenuRef.contains(e.target as Node)) {
         userOpen = false;
@@ -132,9 +162,20 @@
             {#if suggestLoading}
               <div class="text-xs text-ink-500 p-3">Mencari…</div>
             {:else}
+              {#if q.trim()}
+                <button type="button" on:click={search} class="mb-1 flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left hover:bg-ink-50">
+                  <span class="grid h-9 w-9 place-items-center rounded-xl bg-app-primary/10 text-app-primary">
+                    <Icon name="search" size={15} />
+                  </span>
+                  <span class="min-w-0 flex-1">
+                    <span class="block text-sm font-semibold">Cari kata kunci "{q.trim()}"</span>
+                    <span class="block text-xs text-ink-500">Lihat semua hasil yang cocok</span>
+                  </span>
+                </button>
+              {/if}
               {#if suggestions.products.length}
                 <div class="text-[10px] uppercase tracking-widest text-ink-400 px-3 py-1.5">Produk</div>
-                {#each suggestions.products as p}
+                {#each suggestions.products.slice(0, 5) as p}
                   <button type="button" on:click={() => pickSuggestion(`/product/${p.slug || p.id}`)} class="flex items-center gap-2 w-full px-2 py-1.5 rounded-lg hover:bg-ink-50 text-left">
                     <img src={p.image} alt="" class="w-9 h-9 rounded-lg object-cover shrink-0" />
                     <div class="flex-1 min-w-0">
@@ -146,7 +187,7 @@
               {/if}
               {#if suggestions.vendors.length}
                 <div class="text-[10px] uppercase tracking-widest text-ink-400 px-3 py-1.5 mt-1">Toko</div>
-                {#each suggestions.vendors as v}
+                {#each suggestions.vendors.slice(0, 4) as v}
                   <button type="button" on:click={() => pickSuggestion(v.username ? `/${v.username}` : `/vendors/${v.id}`)} class="flex items-center gap-2 w-full px-2 py-1.5 rounded-lg hover:bg-ink-50 text-left">
                     <img src={v.avatar} alt="" class="w-9 h-9 rounded-full object-cover shrink-0" />
                     <div class="flex-1 min-w-0">
@@ -159,7 +200,7 @@
               {#if suggestions.tags.length}
                 <div class="text-[10px] uppercase tracking-widest text-ink-400 px-3 py-1.5 mt-1">Tag</div>
                 <div class="flex flex-wrap gap-1.5 px-2 pb-2">
-                  {#each suggestions.tags as t}
+                  {#each suggestions.tags.slice(0, 6) as t}
                     <button type="button" on:click={() => pickSuggestion(`/products?tag=${t.slug}`)} class="text-xs px-2.5 py-1 rounded-full bg-ink-100 hover:bg-app-primary hover:text-app-pfg transition">#{t.slug} <span class="opacity-60">({t.product_count})</span></button>
                   {/each}
                 </div>
@@ -233,7 +274,36 @@
         {/if}
       </div>
 
-      <button on:click={() => mobileOpen = !mobileOpen} class="md:hidden ml-auto w-10 h-10 grid place-items-center rounded-full hover:bg-ink-100" aria-label="Menu">
+      <div class="ml-auto flex items-center gap-0.5 md:hidden">
+        {#if auth.user?.role !== 'ADMIN'}
+          <a href={authedHref('/wishlist')} class="relative grid h-9 w-9 place-items-center rounded-full hover:bg-ink-100" aria-label="Wishlist">
+            <Icon name="heart" size={17} class="text-ink-700" />
+            {#if wishlist.ids.length > 0}
+              <span class="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">{badgeText(wishlist.ids.length)}</span>
+            {/if}
+          </a>
+          <a href={authedHref('/cart')} class="relative grid h-9 w-9 place-items-center rounded-full hover:bg-ink-100" aria-label="Keranjang">
+            <Icon name="shopping-bag" size={17} class="text-ink-700" />
+            {#if cart.count > 0}
+              <span class="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-app-primary px-1 text-[9px] font-bold text-app-pfg">{badgeText(cart.count)}</span>
+            {/if}
+          </a>
+          <a href={authedHref('/orders')} class="relative grid h-9 w-9 place-items-center rounded-full hover:bg-ink-100" aria-label="Pesanan">
+            <Icon name="receipt-text" size={17} class="text-ink-700" />
+            {#if activeOrders > 0}
+              <span class="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-amber-500 px-1 text-[9px] font-bold text-white">{badgeText(activeOrders)}</span>
+            {/if}
+          </a>
+          <a href={authedHref('/chats')} class="relative grid h-9 w-9 place-items-center rounded-full hover:bg-ink-100" aria-label="Chat">
+            <Icon name="message-circle" size={17} class="text-ink-700" />
+            {#if unreadChats > 0}
+              <span class="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">{badgeText(unreadChats)}</span>
+            {/if}
+          </a>
+        {/if}
+      </div>
+
+      <button on:click={() => mobileOpen = !mobileOpen} class="md:hidden w-10 h-10 grid place-items-center rounded-full hover:bg-ink-100" aria-label="Menu">
         <Icon name={mobileOpen ? 'x' : 'menu'} size={20} />
       </button>
     </div>
@@ -253,7 +323,13 @@
         </form>
         <nav class="grid gap-1 text-sm">
           {#each navItems as [label, href]}
-            <a {href} on:click={() => mobileOpen = false} class="px-3 py-2.5 rounded-lg hover:bg-ink-50">{label}</a>
+            {@const badge = mobileBadge(label)}
+            <a {href} on:click={() => mobileOpen = false} class="flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg hover:bg-ink-50">
+              <span>{label}</span>
+              {#if badge > 0}
+                <span class="grid h-5 min-w-5 place-items-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">{badgeText(badge)}</span>
+              {/if}
+            </a>
           {/each}
           {#if auth.user}
             {#if !isAdmin}

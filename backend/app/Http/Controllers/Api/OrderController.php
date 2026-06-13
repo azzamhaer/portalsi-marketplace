@@ -25,6 +25,15 @@ class OrderController extends Controller
         return response()->json($q->paginate(20));
     }
 
+    public function activeCount(Request $request)
+    {
+        $count = Order::where('user_id', $request->user()->id)
+            ->whereIn('status', ['PENDING_PAYMENT', 'PAID', 'PROCESSING', 'SHIPPED'])
+            ->count();
+
+        return response()->json(['count' => $count]);
+    }
+
     public function show(Request $request, $id)
     {
         $order = Order::with(['items', 'payment', 'address', 'user:id,name,email'])
@@ -182,6 +191,51 @@ class OrderController extends Controller
                 'order_number' => $orderNumber,
             ]);
         });
+    }
+
+    public function applyVoucher(Request $request)
+    {
+        $data = $request->validate([
+            'product_id'   => 'required|exists:products,id',
+            'qty'          => 'required|integer|min:1',
+            'voucher_code' => 'required|string|max:30',
+        ]);
+
+        $product = Product::where('is_active', true)
+            ->with('vendor:id,name,moderation_mode')
+            ->findOrFail($data['product_id']);
+
+        if ($product->vendor && in_array($product->vendor->moderation_mode, ['LIMITED', 'DISABLED'])) {
+            return response()->json(['message' => "Toko {$product->vendor->name} sedang tidak menerima pesanan."], 422);
+        }
+
+        if ($data['qty'] > $product->stock) {
+            return response()->json(['message' => "Stok {$product->name} hanya {$product->stock}"], 422);
+        }
+
+        $lineSubtotal = $product->price * $data['qty'];
+        $code = strtoupper(trim($data['voucher_code']));
+        $voucher = SellerVoucher::where('vendor_id', $product->vendor_id)->where('code', $code)->first();
+
+        if (!$voucher || !$voucher->isUsableFor($product, $lineSubtotal)) {
+            return response()->json(['message' => "Voucher {$code} tidak valid untuk {$product->name}"], 422);
+        }
+
+        $discount = $voucher->discountFor($lineSubtotal);
+
+        return response()->json([
+            'code'          => $voucher->code,
+            'type'          => $voucher->type,
+            'value'         => $voucher->value,
+            'min_subtotal'  => $voucher->min_subtotal,
+            'max_discount'  => $voucher->max_discount,
+            'discount'      => $discount,
+            'line_subtotal' => $lineSubtotal,
+            'line_total'    => max(0, $lineSubtotal - $discount),
+            'label'         => $voucher->type === 'PERCENT'
+                ? "Diskon {$voucher->value}%"
+                : "Diskon Rp " . number_format($voucher->value, 0, ',', '.'),
+        ]);
     }
 
     protected function sendOrderEmail($order, $user, string $event): void

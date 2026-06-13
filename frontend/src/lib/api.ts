@@ -92,8 +92,10 @@ export const apiEndpoints = {
 
   /* orders */
   orders:         (q='') => api('/orders' + (q ? '?' + q : '')),
+  ordersActiveCount: () => api('/orders/active-count'),
   order:          (id: string|number) => api(`/orders/${id}`),
   checkout:       (b: any)     => api('/checkout', { method: 'POST', body: b }),
+  applyVoucher:   (b: any)     => api('/checkout/apply-voucher', { method: 'POST', body: b }),
   refreshOrder:   (id: string|number) => api(`/orders/${id}/refresh`, { method: 'POST' }),
   simulateOrder:  (id: string|number) => api(`/orders/${id}/simulate`,{ method: 'POST' }),
   markOrderDone:  (id: string|number) => api(`/orders/${id}/done`,    { method: 'POST' }),

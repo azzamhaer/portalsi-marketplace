@@ -9,6 +9,13 @@
   import { page } from '$app/stores';
   let { data } = $props();
   let filtersOpen = $state(false);
+  const sorts = [
+    ['popular', 'Terpopuler', 'flame'],
+    ['newest', 'Terbaru', 'sparkles'],
+    ['cheap', 'Termurah', 'arrow-down'],
+    ['exp', 'Termahal', 'arrow-up'],
+    ['rating', 'Rating', 'star'],
+  ];
 
   function setSort(v: string) {
     const u = new URL($page.url);
@@ -30,7 +37,7 @@
     <SmartSearch placeholder="Cari produk di katalog" />
   </div>
 
-  <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6 sm:mb-8">
+  <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-4 sm:mb-6">
     <div>
       <div class="section-eyebrow mb-2">Katalog</div>
       <h1 class="section-title">{data.search ? `Hasil "${data.search}"` : data.tag ? `#${data.tag}` : 'Semua Produk'}</h1>
@@ -42,38 +49,35 @@
     </div>
     <div class="flex gap-2">
       {#if data.tag}<button on:click={clearTag} class="btn-outline btn-sm">Hapus tag</button>{/if}
-      <select on:change={(e: any) => setSort(e.target.value)} value={data.sort} class="input-sm input w-full sm:w-56">
-        <option value="popular">Terpopuler</option>
-        <option value="newest">Terbaru</option>
-        <option value="cheap">Termurah</option>
-        <option value="exp">Termahal</option>
-        <option value="rating">Rating Tertinggi</option>
-      </select>
     </div>
   </div>
 
-  {#await data.streamed.filters}
-    <div class="flex flex-wrap gap-2 mb-6 pb-6 border-b border-ink-100">
-      {#each Array(8) as _}
-        <span class="h-6 w-16 bg-ink-100 animate-pulse rounded-full"></span>
+  <div class="mb-6 flex flex-col gap-3 rounded-2xl border border-ink-100 bg-white p-2 shadow-soft sm:flex-row sm:items-center sm:justify-between">
+    <div class="flex gap-1 overflow-x-auto pb-1 sm:pb-0">
+      {#each sorts as [value, label, icon]}
+        <button
+          type="button"
+          on:click={() => setSort(value)}
+          class="flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition"
+          class:bg-app-primary={data.sort === value}
+          class:text-app-pfg={data.sort === value}
+          class:bg-ink-50={data.sort !== value}
+          class:text-ink-600={data.sort !== value}
+          class:hover:bg-ink-100={data.sort !== value}
+        >
+          <Icon name={icon} size={13} /> {label}
+        </button>
       {/each}
     </div>
-  {:then filters}
-    {#if filters.tags?.length}
-      <div class="flex flex-wrap gap-2 mb-6 pb-6 border-b border-ink-100">
-        {#each filters.tags.slice(0, 16) as t}
-          <a href={`/products?tag=${t.slug}`} class="text-xs px-3 py-1.5 rounded-full transition" class:bg-app-primary={data.tag===t.slug} class:text-app-pfg={data.tag===t.slug} class:bg-ink-100={data.tag!==t.slug} class:hover:bg-ink-200={data.tag!==t.slug}>#{t.slug}</a>
-        {/each}
-      </div>
-    {/if}
-  {/await}
+    <button type="button" on:click={() => filtersOpen = !filtersOpen} class="flex items-center justify-center gap-2 rounded-xl border border-ink-100 px-4 py-2 text-sm font-semibold transition hover:bg-ink-50 lg:hidden">
+      <Icon name="sliders-horizontal" size={16} />
+      Filter produk
+      <Icon name={filtersOpen ? 'chevron-up' : 'chevron-down'} size={16} />
+    </button>
+  </div>
 
   <div class="grid gap-8 lg:grid-cols-[270px_1fr]">
     <div class="lg:sticky lg:top-24 lg:h-fit">
-      <button type="button" on:click={() => filtersOpen = !filtersOpen} class="mb-3 flex w-full items-center justify-between rounded-2xl border border-ink-100 bg-white px-4 py-3 text-sm font-semibold shadow-soft lg:hidden">
-        <span class="flex items-center gap-2"><Icon name="sliders-horizontal" size={16} /> Filter produk</span>
-        <Icon name={filtersOpen ? 'chevron-up' : 'chevron-down'} size={16} />
-      </button>
       {#await data.streamed.filters}
         <div class="{filtersOpen ? 'block' : 'hidden'} rounded-2xl border border-ink-100 bg-white p-4 lg:block">
           <div class="h-5 w-28 bg-ink-100 rounded animate-pulse mb-4"></div>

@@ -3,9 +3,13 @@
   import { apiEndpoints } from '$lib/api';
   import Icon from './Icon.svelte';
 
-  let { placeholder = 'Cari produk, brand, atau toko', autofocus = false } = $props<{ placeholder?: string; autofocus?: boolean }>();
+  let {
+    placeholder = 'Cari produk, brand, atau toko',
+    autofocus = false,
+    initialQuery = '',
+  } = $props<{ placeholder?: string; autofocus?: boolean; initialQuery?: string }>();
 
-  let q = $state('');
+  let q = $state(initialQuery);
   let open = $state(false);
   let loading = $state(false);
   let suggestions = $state<{ products: any[]; vendors: any[]; tags: any[] }>({ products: [], vendors: [], tags: [] });
@@ -31,7 +35,7 @@
     e?.preventDefault();
     if (!q.trim()) return;
     open = false;
-    goto('/products?search=' + encodeURIComponent(q.trim()));
+    goto('/search?q=' + encodeURIComponent(q.trim()));
   }
 
   function pick(href: string) {
@@ -61,9 +65,21 @@
       {#if loading}
         <div class="p-4 text-center text-xs text-ink-500">Mencari...</div>
       {:else}
+        {#if q.trim()}
+          <button type="button" on:click={submit} class="mb-1 flex w-full items-center gap-2 rounded-xl px-2 py-2 text-left hover:bg-ink-50">
+            <span class="grid h-9 w-9 place-items-center rounded-xl bg-app-primary/10 text-app-primary">
+              <Icon name="search" size={16} />
+            </span>
+            <span class="min-w-0 flex-1">
+              <span class="block text-sm font-semibold">Cari kata kunci "{q.trim()}"</span>
+              <span class="block text-xs text-ink-500">Lihat semua hasil yang cocok</span>
+            </span>
+            <Icon name="arrow-right" size={15} class="text-ink-400" />
+          </button>
+        {/if}
         {#if suggestions.products.length}
           <div class="px-2 py-1 text-[10px] font-semibold uppercase tracking-widest text-ink-400">Produk</div>
-          {#each suggestions.products as p}
+          {#each suggestions.products.slice(0, 5) as p}
             <button type="button" on:click={() => pick(`/product/${p.slug || p.id}`)} class="flex w-full items-center gap-2 rounded-xl px-2 py-2 text-left hover:bg-ink-50">
               <img src={p.image} alt="" class="h-10 w-10 rounded-xl object-cover" />
               <div class="min-w-0 flex-1">
@@ -75,7 +91,7 @@
         {/if}
         {#if suggestions.vendors.length}
           <div class="px-2 py-1 text-[10px] font-semibold uppercase tracking-widest text-ink-400">Toko</div>
-          {#each suggestions.vendors as v}
+          {#each suggestions.vendors.slice(0, 4) as v}
             <button type="button" on:click={() => pick(v.username ? `/${v.username}` : `/vendors/${v.id}`)} class="flex w-full items-center gap-2 rounded-xl px-2 py-2 text-left hover:bg-ink-50">
               <img src={v.avatar} alt="" class="h-10 w-10 rounded-full object-cover" />
               <div class="min-w-0 flex-1">
@@ -88,7 +104,7 @@
         {#if suggestions.tags.length}
           <div class="px-2 py-1 text-[10px] font-semibold uppercase tracking-widest text-ink-400">Tag</div>
           <div class="flex flex-wrap gap-1.5 px-2 pb-2">
-            {#each suggestions.tags as t}
+            {#each suggestions.tags.slice(0, 6) as t}
               <button type="button" on:click={() => pick(`/products?tag=${t.slug}`)} class="rounded-full bg-ink-100 px-2.5 py-1 text-xs hover:bg-app-primary hover:text-app-pfg">#{t.slug}</button>
             {/each}
           </div>

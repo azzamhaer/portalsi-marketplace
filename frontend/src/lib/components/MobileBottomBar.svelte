@@ -1,6 +1,6 @@
 <script lang="ts">
   import { page } from '$app/stores';
-  import { auth, cart, wishlist } from '$lib/stores.svelte';
+  import { auth } from '$lib/stores.svelte';
   import { apiEndpoints } from '$lib/api';
   import { onMount } from 'svelte';
   import Icon from './Icon.svelte';
@@ -11,7 +11,7 @@
 
   const items = $derived([
     { label: 'Beranda', href: '/', match: '/', icon: 'home', badge: 0 },
-    { label: 'Produk', href: '/products', match: '/products', icon: 'package-search', badge: cart.count + wishlist.ids.length },
+    { label: 'Produk', href: '/products', match: '/products', icon: 'package-search', badge: 0 },
     { label: 'Notifikasi', href: auth.user ? '/notifications' : '/login?next=/notifications', match: '/notifications', icon: 'bell', badge: unreadNotifications },
     { label: 'Profil', href: auth.user ? '/profile' : '/login?next=/profile', match: '/profile', icon: 'user-round', badge: unreadChats },
   ]);
