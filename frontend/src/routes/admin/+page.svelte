@@ -110,7 +110,7 @@
           <button type="button" on:click={loadFreshSummary} disabled={freshLoading} class="btn-outline btn-sm">
             <Icon name="list-checks" size={13} /> {freshLoading ? 'Memuat...' : 'Lihat ringkasan'}
           </button>
-          <button type="button" on:click={runFreshStart} disabled={freshRunning} class="btn-sm bg-red-600 text-white hover:bg-red-700">
+          <button type="button" on:click={runFreshStart} disabled={freshRunning} class="btn-danger btn-sm">
             <Icon name="trash-2" size={13} /> {freshRunning ? 'Membersihkan...' : 'Hapus data testing'}
           </button>
         </div>
