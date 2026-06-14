@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Setting;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class SettingsController extends Controller
 {
@@ -140,13 +141,124 @@ class SettingsController extends Controller
 
     public function uploadLogo(Request $request)
     {
-        $request->validate(['logo' => 'required|file|image|max:1024']);
+        $request->validate(['logo' => 'required|file|mimes:png,jpg,jpeg,webp|max:1024']);
         $file = $request->file('logo');
-        $contents = base64_encode(file_get_contents($file->getRealPath()));
-        $mime = $file->getMimeType();
-        $dataUri = "data:{$mime};base64,{$contents}";
-        Setting::put('logo_url', $dataUri);
-        return response()->json(['logo_url' => $dataUri]);
+        $ext = strtolower($file->getClientOriginalExtension() ?: $file->extension() ?: 'png');
+        $path = $file->storeAs('branding', 'app-logo-' . time() . '.' . $ext, 'public');
+        $url = Storage::disk('public')->url($path);
+        if (!str_starts_with($url, 'http')) {
+            $url = rtrim(config('app.url'), '/') . $url;
+        }
+        Setting::put('logo_url', $url);
+        return response()->json([
+            'logo_url' => $url,
+            'email_logo_url' => rtrim(config('app.url'), '/') . '/api/settings/email-logo.png?v=' . time(),
+        ]);
+    }
+
+    public function emailLogo()
+    {
+        $logo = trim((string) Setting::get('logo_url', ''));
+
+        if (preg_match('#^data:(image/(png|jpe?g|gif|webp));base64,(.+)$#i', $logo, $m)) {
+            $bytes = base64_decode($m[3], true);
+            if ($bytes !== false) {
+                return response($bytes, 200)
+                    ->header('Content-Type', strtolower($m[1]) === 'image/jpg' ? 'image/jpeg' : $m[1])
+                    ->header('Cache-Control', 'public, max-age=86400');
+            }
+        }
+
+        if ($this->isRasterLogoUrl($logo)) {
+            if (str_contains($logo, '/storage/')) {
+                $relative = ltrim(parse_url($logo, PHP_URL_PATH) ?: '', '/');
+                $relative = preg_replace('#^storage/#', '', $relative);
+                if ($relative && Storage::disk('public')->exists($relative)) {
+                    $mime = Storage::disk('public')->mimeType($relative) ?: 'image/png';
+                    return response(Storage::disk('public')->get($relative), 200)
+                        ->header('Content-Type', $mime)
+                        ->header('Cache-Control', 'public, max-age=86400');
+                }
+            }
+            return redirect()->away($logo, 302);
+        }
+
+        return $this->generatedEmailLogo();
+    }
+
+    private function isRasterLogoUrl(string $url): bool
+    {
+        if ($url === '' || str_starts_with($url, 'data:')) return false;
+        $path = strtolower(parse_url($url, PHP_URL_PATH) ?: $url);
+        return (bool) preg_match('/\.(png|jpe?g|gif|webp)$/', $path);
+    }
+
+    private function generatedEmailLogo()
+    {
+        $appName = Setting::get('app_name', 'MPSI');
+        $letter = strtoupper(mb_substr(trim($appName), 0, 1) ?: 'M');
+        $primary = Setting::get('primary_color', '#0a0a0a');
+        $fg = Setting::get('primary_fg', '#ffffff');
+
+        if (function_exists('imagecreatetruecolor')) {
+            $img = imagecreatetruecolor(144, 144);
+            imagealphablending($img, true);
+            imagesavealpha($img, true);
+
+            [$r, $g, $b] = $this->hexToRgb($primary);
+            [$fr, $fgc, $fb] = $this->hexToRgb($fg);
+            $bg = imagecolorallocate($img, $r, $g, $b);
+            $text = imagecolorallocate($img, $fr, $fgc, $fb);
+            imagefilledrectangle($img, 0, 0, 144, 144, $bg);
+
+            $font = 5;
+            $tw = imagefontwidth($font) * strlen($letter);
+            $th = imagefontheight($font);
+            imagestring($img, $font, (int) ((144 - $tw) / 2), (int) ((144 - $th) / 2), $letter, $text);
+
+            ob_start();
+            imagepng($img);
+            $png = ob_get_clean();
+            imagedestroy($img);
+
+            return response($png, 200)
+                ->header('Content-Type', 'image/png')
+                ->header('Cache-Control', 'public, max-age=86400');
+        }
+
+        [$r, $g, $b] = $this->hexToRgb($primary);
+        return response($this->solidPng(144, 144, $r, $g, $b), 200)
+            ->header('Content-Type', 'image/png')
+            ->header('Cache-Control', 'public, max-age=86400');
+    }
+
+    private function solidPng(int $width, int $height, int $r, int $g, int $b): string
+    {
+        $pixel = chr($r) . chr($g) . chr($b) . chr(255);
+        $raw = '';
+        for ($y = 0; $y < $height; $y++) {
+            $raw .= "\0" . str_repeat($pixel, $width);
+        }
+
+        return "\x89PNG\r\n\x1a\n"
+            . $this->pngChunk('IHDR', pack('NNCCCCC', $width, $height, 8, 6, 0, 0, 0))
+            . $this->pngChunk('IDAT', gzcompress($raw, 9))
+            . $this->pngChunk('IEND', '');
+    }
+
+    private function pngChunk(string $type, string $data): string
+    {
+        return pack('N', strlen($data)) . $type . $data . pack('N', crc32($type . $data));
+    }
+
+    private function hexToRgb(string $hex): array
+    {
+        $hex = ltrim(trim($hex), '#');
+        if (strlen($hex) === 3) {
+            $hex = $hex[0] . $hex[0] . $hex[1] . $hex[1] . $hex[2] . $hex[2];
+        }
+        if (!preg_match('/^[0-9a-f]{6}$/i', $hex)) return [10, 10, 10];
+        return [hexdec(substr($hex, 0, 2)), hexdec(substr($hex, 2, 2)), hexdec(substr($hex, 4, 2))];
     }
 
     public function uploadHero(Request $request)

@@ -36,11 +36,11 @@ class UserNotification extends Model
             if ($user && $user->email) {
                 $brevo = new \App\Services\BrevoService();
                 $front = rtrim(config('services.frontend_url', 'http://localhost:5173'), '/');
-                $url = $actionUrl ? ($actionUrl[0] === '/' ? $front . $actionUrl : $actionUrl) : null;
+                $url = $front . '/notifications/' . $notif->id;
                 $brevo->send($user->email, $user->name, $title, $brevo->layout(
                     $title,
                     "<p>Hai <b>" . htmlspecialchars($user->name) . "</b>,</p><p>" . nl2br(htmlspecialchars($message)) . "</p>",
-                    $url, $url ? 'Lihat detail' : null
+                    $url, 'Lihat detail'
                 ));
             }
         } catch (\Throwable $e) {

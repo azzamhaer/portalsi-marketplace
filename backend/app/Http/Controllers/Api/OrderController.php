@@ -57,7 +57,7 @@ class OrderController extends Controller
             'city'               => 'required|string|max:255',
             'district'           => 'required|string|max:255',
             'village'            => 'required|string|max:255',
-            'postal_code'        => 'nullable|string|max:10',
+            'postal_code'        => 'required|string|max:10',
             'full_address'       => 'required|string',
             'address_note'       => 'nullable|string|max:1000',
             'notes'              => 'nullable|string',

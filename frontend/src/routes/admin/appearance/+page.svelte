@@ -150,9 +150,9 @@
               {:else}<Icon name="image" size={28} class="text-ink-300" />{/if}
             </div>
             <div>
-              <input type="file" accept="image/*" on:change={(e: any) => logoFile = e.target.files?.[0] ?? null} class="text-sm mb-2" />
+              <input type="file" accept="image/png,image/jpeg,image/webp" on:change={(e: any) => logoFile = e.target.files?.[0] ?? null} class="text-sm mb-2" />
               <button on:click={uploadLogo} disabled={!logoFile} class="btn-outline btn-sm">Upload</button>
-              <p class="helper">PNG/JPG/SVG, maks 1MB. Akan dipakai untuk navbar, footer, favicon, & email template.</p>
+              <p class="helper">PNG/JPG/WebP, maks 1MB. Format ini aman tampil di navbar, footer, favicon, dan email.</p>
             </div>
           </div>
         </div>

@@ -22,6 +22,7 @@ use Illuminate\Support\Facades\Route;
 
 /* ===== Public ===== */
 Route::get('/settings/public',          [SettingsController::class, 'publicSettings']);
+Route::get('/settings/email-logo.png',  [SettingsController::class, 'emailLogo']);
 Route::get('/home',                     [CatalogController::class, 'homeData']);
 Route::get('/categories',               [CatalogController::class, 'categories']);
 Route::get('/tags',                     [TagController::class, 'index']);
@@ -94,6 +95,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/reports',                  [ReportController::class, 'store']);
     Route::get('/notifications',             [NotificationController::class, 'index']);
     Route::get('/notifications/unread-count',[NotificationController::class, 'unreadCount']);
+    Route::get('/notifications/{id}',        [NotificationController::class, 'show']);
     Route::post('/notifications/{id}/read',  [NotificationController::class, 'markRead']);
     Route::post('/notifications/read-all',   [NotificationController::class, 'markAllRead']);
     Route::delete('/notifications/{id}',     [NotificationController::class, 'destroy']);

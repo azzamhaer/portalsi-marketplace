@@ -120,9 +120,15 @@ class ReportController extends Controller
             'REPORT_RESPONSE',
             'Laporan Anda diproses',
             "Laporan Anda telah {$report->status}. " . ($data['admin_response'] ?? ''),
-            '/profile',
-            $data['status'] === 'RESOLVED' ? 'SUCCESS' : 'INFO',
-            ['report_id' => $report->id]
+            null,
+            $data['status'] === 'RESOLVED' ? 'SUCCESS' : ($data['status'] === 'REJECTED' ? 'WARNING' : 'INFO'),
+            [
+                'report_id' => $report->id,
+                'status' => $report->status,
+                'admin_response' => $report->admin_response,
+                'target_type' => $report->target_type,
+                'target_id' => $report->target_id,
+            ]
         );
 
         return response()->json($report->fresh());

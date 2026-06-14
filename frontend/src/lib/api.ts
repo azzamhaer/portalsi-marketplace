@@ -128,6 +128,7 @@ export const apiEndpoints = {
 
   /* notifications */
   notifications: (q='') => api('/notifications' + (q ? '?'+q : '')),
+  notification: (id: string|number) => api(`/notifications/${id}`),
   notificationsUnreadCount: () => api('/notifications/unread-count'),
   notificationMarkRead: (id: number) => api(`/notifications/${id}/read`, { method: 'POST' }),
   notificationsReadAll: () => api('/notifications/read-all', { method: 'POST' }),

@@ -64,6 +64,8 @@
     try { await apiEndpoints.logout(); } catch {}
     setToken(null);
     auth.clear();
+    cart.clear();
+    wishlist.clear();
     userOpen = false;
     goto('/');
   }
@@ -211,13 +213,13 @@
         {#if auth.user?.role !== 'ADMIN'}
           <a href="/wishlist" class="relative w-10 h-10 grid place-items-center rounded-full hover:bg-ink-100 transition-colors" aria-label="Wishlist">
             <Icon name="heart" size={18} class="text-ink-700" />
-            {#if wishlist.ids.length > 0}
+            {#if auth.user && wishlist.ids.length > 0}
               <span class="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[10px] font-semibold rounded-full min-w-[18px] h-[18px] grid place-items-center px-1.5">{wishlist.ids.length > 99 ? '99+' : wishlist.ids.length}</span>
             {/if}
           </a>
           <a href="/cart" class="w-10 h-10 grid place-items-center rounded-full hover:bg-ink-100 transition-colors relative" aria-label="Keranjang">
             <Icon name="shopping-bag" size={18} class="text-ink-700" />
-            {#if cart.count > 0}
+            {#if auth.user && cart.count > 0}
               <span class="absolute -top-0.5 -right-0.5 bg-app-primary text-app-pfg text-[10px] font-semibold rounded-full min-w-[18px] h-[18px] grid place-items-center px-1.5">{cart.count}</span>
             {/if}
           </a>
@@ -270,13 +272,13 @@
         {#if auth.user?.role !== 'ADMIN'}
           <a href={authedHref('/wishlist')} class="relative grid h-9 w-9 place-items-center rounded-full hover:bg-ink-100" aria-label="Wishlist">
             <Icon name="heart" size={17} class="text-ink-700" />
-            {#if wishlist.ids.length > 0}
+            {#if auth.user && wishlist.ids.length > 0}
               <span class="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">{badgeText(wishlist.ids.length)}</span>
             {/if}
           </a>
           <a href={authedHref('/cart')} class="relative grid h-9 w-9 place-items-center rounded-full hover:bg-ink-100" aria-label="Keranjang">
             <Icon name="shopping-bag" size={17} class="text-ink-700" />
-            {#if cart.count > 0}
+            {#if auth.user && cart.count > 0}
               <span class="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-app-primary px-1 text-[9px] font-bold text-app-pfg">{badgeText(cart.count)}</span>
             {/if}
           </a>
@@ -306,12 +308,12 @@
     {@const navItems = isAdmin
       ? [
           ['Admin Center','/admin','layout-dashboard'],
-          ['Cari toko','/vendors','storefront'],
+          ['Cari toko','/vendors','store'],
           ['Opsi pembayaran','/payment-info','credit-card'],
           ['FAQ','/help','circle-help'],
         ]
       : [
-          ['Cari toko','/vendors','storefront'],
+          ['Cari toko','/vendors','store'],
           ['Opsi pembayaran','/payment-info','credit-card'],
           ['FAQ','/help','circle-help'],
         ]}
@@ -319,9 +321,56 @@
       <div class="container-x py-4 space-y-3 pb-8">
         <form on:submit={search} class="flex items-center gap-2 bg-ink-50 rounded-full pl-4 pr-1.5 py-1.5">
           <Icon name="search" size={16} class="text-ink-400" />
-          <input bind:value={q} type="text" placeholder="Cari produk" class="flex-1 bg-transparent text-sm outline-none" />
+          <input bind:value={q} on:input={onQueryInput} on:focus={() => { if (q.trim()) suggestOpen = true; }} type="text" placeholder="Cari produk" class="flex-1 bg-transparent text-sm outline-none" />
           <button type="submit" class="text-xs bg-app-primary text-app-pfg px-3 py-1.5 rounded-full">Cari</button>
         </form>
+        {#if suggestOpen && (suggestions.products.length || suggestions.vendors.length || suggestions.tags.length || suggestLoading || q.trim())}
+          <div class="rounded-2xl border border-ink-100 bg-white p-2 shadow-soft">
+            {#if suggestLoading}
+              <div class="p-3 text-xs text-ink-500">Mencari...</div>
+            {:else}
+              <button type="button" on:click={search} class="mb-1 flex w-full items-center gap-2 rounded-xl px-2 py-2 text-left hover:bg-ink-50">
+                <span class="grid h-9 w-9 place-items-center rounded-xl bg-app-primary/10 text-app-primary"><Icon name="search" size={15} /></span>
+                <span class="min-w-0 flex-1">
+                  <span class="block text-sm font-semibold">Cari kata kunci "{q.trim()}"</span>
+                  <span class="block text-xs text-ink-500">Lihat hasil lengkap</span>
+                </span>
+              </button>
+              {#if suggestions.products.length}
+                <div class="px-3 py-1.5 text-[10px] uppercase tracking-widest text-ink-400">Produk</div>
+                {#each suggestions.products.slice(0, 4) as p}
+                  <button type="button" on:click={() => pickSuggestion(`/product/${p.slug || p.id}`)} class="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-ink-50">
+                    <img src={p.image} alt="" class="h-9 w-9 shrink-0 rounded-lg object-cover" />
+                    <span class="min-w-0 flex-1">
+                      <span class="block truncate text-sm font-medium">{p.name}</span>
+                      <span class="block text-xs text-ink-500">Rp {p.price.toLocaleString('id-ID')}</span>
+                    </span>
+                  </button>
+                {/each}
+              {/if}
+              {#if suggestions.vendors.length}
+                <div class="mt-1 px-3 py-1.5 text-[10px] uppercase tracking-widest text-ink-400">Toko</div>
+                {#each suggestions.vendors.slice(0, 3) as v}
+                  <button type="button" on:click={() => pickSuggestion(v.username ? `/${v.username}` : `/vendors/${v.id}`)} class="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-ink-50">
+                    <img src={v.avatar} alt="" class="h-9 w-9 shrink-0 rounded-full object-cover" />
+                    <span class="min-w-0 flex-1">
+                      <span class="block truncate text-sm font-medium">{v.name}</span>
+                      <span class="block text-xs text-ink-500">@{v.username}</span>
+                    </span>
+                  </button>
+                {/each}
+              {/if}
+              {#if suggestions.tags.length}
+                <div class="mt-1 px-3 py-1.5 text-[10px] uppercase tracking-widest text-ink-400">Tag</div>
+                <div class="flex flex-wrap gap-1.5 px-2 pb-1">
+                  {#each suggestions.tags.slice(0, 5) as t}
+                    <button type="button" on:click={() => pickSuggestion(`/products?tag=${t.slug}`)} class="rounded-full bg-ink-100 px-2.5 py-1 text-xs hover:bg-app-primary hover:text-app-pfg">#{t.slug}</button>
+                  {/each}
+                </div>
+              {/if}
+            {/if}
+          </div>
+        {/if}
         <nav class="grid gap-1 text-sm">
           {#each navItems as [label, href, icon]}
             <a {href} on:click={() => mobileOpen = false} class="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-ink-50">

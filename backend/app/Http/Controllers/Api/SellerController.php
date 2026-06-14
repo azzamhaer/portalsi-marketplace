@@ -28,7 +28,7 @@ class SellerController extends Controller
             'city'         => 'required|string|max:255',
             'district'     => 'required|string|max:255',
             'village'      => 'required|string|max:255',
-            'postal_code'  => 'nullable|string|max:10',
+            'postal_code'  => 'required|string|max:10',
             'description'  => 'required|string',
             'bank_name'    => 'nullable|string|max:50',
             'bank_account' => 'nullable|string|max:30',
@@ -36,7 +36,7 @@ class SellerController extends Controller
             'ktp_image'    => 'required|string', // base64 data URI
             'latitude'     => 'nullable|numeric',
             'longitude'    => 'nullable|numeric',
-            'full_address' => 'nullable|string',
+            'full_address' => 'required|string',
             'address_note' => 'nullable|string|max:1000',
         ]);
 

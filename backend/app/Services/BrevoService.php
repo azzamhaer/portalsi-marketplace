@@ -70,14 +70,17 @@ class BrevoService
         $appName  = Setting::get('app_name', 'MPSI');
         $primary  = Setting::get('primary_color', '#0a0a0a');
         $textFg   = Setting::get('primary_fg', '#ffffff');
-        $logo     = $this->absoluteAssetUrl(Setting::get('logo_url', ''));
+        $logo     = $this->emailLogoUrl();
         $cta = '';
         if ($ctaUrl && $ctaLabel) {
             $cta = "<a href='" . htmlspecialchars($ctaUrl, ENT_QUOTES) . "' style='display:inline-block;padding:14px 28px;background:{$primary};color:{$textFg};text-decoration:none;border-radius:999px;font-weight:600;font-size:14px;margin-top:16px;'>" . htmlspecialchars($ctaLabel) . "</a>";
         }
-        $logoBlock = $logo
-            ? "<img src='" . htmlspecialchars($logo, ENT_QUOTES) . "' alt='" . htmlspecialchars($appName, ENT_QUOTES) . "' style='height:36px;border-radius:8px;'/>"
-            : "<div style='font-size:20px;font-weight:800;color:{$primary};'>{$appName}</div>";
+        $logoBlock = "<table role='presentation' cellpadding='0' cellspacing='0'><tr>
+            <td style='width:44px;height:44px;border-radius:12px;overflow:hidden;background:{$primary};'>
+              <img src='" . htmlspecialchars($logo, ENT_QUOTES) . "' alt='" . htmlspecialchars($appName, ENT_QUOTES) . "' width='44' height='44' style='display:block;width:44px;height:44px;object-fit:cover;border:0;outline:none;text-decoration:none;'/>
+            </td>
+            <td style='padding-left:12px;font-size:18px;font-weight:800;color:#111;vertical-align:middle;'>" . htmlspecialchars($appName) . "</td>
+          </tr></table>";
 
         return "<!doctype html>
 <html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'></head>
@@ -96,14 +99,10 @@ class BrevoService
 </body></html>";
     }
 
-    private function absoluteAssetUrl(?string $url): string
+    private function emailLogoUrl(): string
     {
-        $url = trim((string) $url);
-        if ($url === '' || str_starts_with($url, 'data:')) return $url;
-        if (preg_match('#^https?://#i', $url)) return $url;
-
-        $base = rtrim(config('services.frontend_url') ?: config('app.url'), '/');
-        if ($url[0] !== '/') $url = '/' . $url;
-        return $base . $url;
+        $base = rtrim(config('app.url'), '/');
+        $version = substr(sha1(Setting::get('logo_url', '') . Setting::get('primary_color', '') . Setting::get('app_name', '')), 0, 10);
+        return $base . '/api/settings/email-logo.png?v=' . $version;
     }
 }

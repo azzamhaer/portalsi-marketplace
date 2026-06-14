@@ -39,8 +39,7 @@
   async function pick(n: any) {
     open = false;
     try { await apiEndpoints.notificationMarkRead(n.id); } catch {}
-    if (n.action_url) goto(n.action_url);
-    else goto('/notifications');
+    goto(`/notifications/${n.id}`);
   }
 
   onMount(() => {

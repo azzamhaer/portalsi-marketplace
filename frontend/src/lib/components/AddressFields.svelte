@@ -38,7 +38,7 @@
     try {
       provinces = await getJson('provinces.json');
     } catch {
-      areaError = 'Data wilayah otomatis belum bisa dimuat. Isi alamat detail secara manual.';
+      areaError = 'Data wilayah otomatis belum bisa dimuat. Muat ulang halaman atau coba lagi beberapa saat.';
     } finally {
       loading = false;
     }
@@ -103,66 +103,54 @@
 
   {#if contact}
     <div class="grid sm:grid-cols-2 gap-3">
-      <div><label class="label">Nama penerima</label><input class="input" bind:value={value.recipient} required /></div>
-      <div><label class="label">Nomor telepon</label><input class="input" bind:value={value.phone} placeholder="0812xxxxxxxx" required /></div>
+      <div><label class="label">Nama penerima <span class="text-red-600">*</span></label><input class="input" bind:value={value.recipient} required /></div>
+      <div><label class="label">Nomor telepon <span class="text-red-600">*</span></label><input class="input" bind:value={value.phone} placeholder="0812xxxxxxxx" required /></div>
     </div>
   {/if}
 
   <div class="grid sm:grid-cols-2 gap-3">
     <div>
-      <label class="label">Negara</label>
+      <label class="label">Negara <span class="text-red-600">*</span></label>
       <input class="input bg-ink-50" value="Indonesia" disabled />
     </div>
     <div>
-      <label class="label">Provinsi</label>
-      <select class="input" bind:value={provinceId} on:change={(e) => pickProvince((e.currentTarget as HTMLSelectElement).value)}>
+      <label class="label">Provinsi <span class="text-red-600">*</span></label>
+      <select class="input" bind:value={provinceId} on:change={(e) => pickProvince((e.currentTarget as HTMLSelectElement).value)} required>
         <option value="">{loading ? 'Memuat provinsi...' : value.province || 'Pilih provinsi'}</option>
         {#each provinces as p}<option value={p.id}>{p.name}</option>{/each}
       </select>
-      {#if !provinces.length}
-        <input class="input input-sm mt-2" placeholder="Isi provinsi manual" bind:value={value.province} />
-      {/if}
     </div>
   </div>
 
   <div class="grid sm:grid-cols-2 gap-3">
     <div>
-      <label class="label">Kota/Kabupaten</label>
-      <select class="input" bind:value={cityId} on:change={(e) => pickCity((e.currentTarget as HTMLSelectElement).value)} disabled={!!provinceId && !cities.length}>
-        <option value="">{value.city || 'Pilih kota/kabupaten'}</option>
+      <label class="label">Kota/Kabupaten <span class="text-red-600">*</span></label>
+      <select class="input" bind:value={cityId} on:change={(e) => pickCity((e.currentTarget as HTMLSelectElement).value)} disabled={!provinceId || (!!provinceId && !cities.length)} required>
+        <option value="">{provinceId ? (value.city || 'Pilih kota/kabupaten') : 'Pilih provinsi dulu'}</option>
         {#each cities as c}<option value={c.id}>{c.name}</option>{/each}
       </select>
-      {#if !cities.length}
-        <input class="input input-sm mt-2" placeholder="Isi kota/kabupaten manual" bind:value={value.city} required />
-      {/if}
     </div>
     <div>
-      <label class="label">Kecamatan</label>
-      <select class="input" bind:value={districtId} on:change={(e) => pickDistrict((e.currentTarget as HTMLSelectElement).value)} disabled={!!cityId && !districts.length}>
-        <option value="">{value.district || 'Pilih kecamatan'}</option>
+      <label class="label">Kecamatan <span class="text-red-600">*</span></label>
+      <select class="input" bind:value={districtId} on:change={(e) => pickDistrict((e.currentTarget as HTMLSelectElement).value)} disabled={!cityId || (!!cityId && !districts.length)} required>
+        <option value="">{cityId ? (value.district || 'Pilih kecamatan') : 'Pilih kota/kabupaten dulu'}</option>
         {#each districts as d}<option value={d.id}>{d.name}</option>{/each}
       </select>
-      {#if !districts.length}
-        <input class="input input-sm mt-2" placeholder="Isi kecamatan manual" bind:value={value.district} required />
-      {/if}
     </div>
   </div>
 
   <div class="grid sm:grid-cols-[1fr_150px] gap-3">
     <div>
-      <label class="label">Kelurahan/Desa</label>
-      <select class="input" value={value.village || ''} on:change={(e) => pickVillage((e.currentTarget as HTMLSelectElement).value)} disabled={!!districtId && !villages.length}>
-        <option value="">{value.village || 'Pilih kelurahan/desa'}</option>
+      <label class="label">Kelurahan/Desa <span class="text-red-600">*</span></label>
+      <select class="input" value={value.village || ''} on:change={(e) => pickVillage((e.currentTarget as HTMLSelectElement).value)} disabled={!districtId || (!!districtId && !villages.length)} required>
+        <option value="">{districtId ? (value.village || 'Pilih kelurahan/desa') : 'Pilih kecamatan dulu'}</option>
         {#each villages as v}<option value={v.name}>{v.name}</option>{/each}
       </select>
-      {#if !villages.length}
-        <input class="input input-sm mt-2" placeholder="Isi kelurahan/desa manual" bind:value={value.village} required />
-      {/if}
     </div>
-    <div><label class="label">Kode pos</label><input class="input" bind:value={value.postal_code} inputmode="numeric" /></div>
+    <div><label class="label">Kode pos <span class="text-red-600">*</span></label><input class="input" bind:value={value.postal_code} inputmode="numeric" required /></div>
   </div>
 
-  <div><label class="label">Detail jalan, nomor rumah, RT/RW</label><textarea class="input" rows={3} bind:value={value.full_address} required></textarea></div>
+  <div><label class="label">Detail jalan, nomor rumah, RT/RW <span class="text-red-600">*</span></label><textarea class="input" rows={3} bind:value={value.full_address} required></textarea></div>
   <div><label class="label">Detail tambahan</label><textarea class="input" rows={2} bind:value={value.address_note} placeholder="Patokan rumah, catatan kurir, jam penerimaan, dan lainnya"></textarea></div>
 
   {#if areaError}

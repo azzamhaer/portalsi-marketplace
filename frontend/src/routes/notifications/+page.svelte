@@ -39,7 +39,7 @@
       if (!ok) return;
     }
     try { await apiEndpoints.notificationMarkRead(n.id); } catch {}
-    if (n.action_url) goto(n.action_url);
+    goto(`/notifications/${n.id}`);
   }
 
   function sevColor(sev: string) {
@@ -94,7 +94,7 @@
               <p class="text-sm text-ink-700 mt-1 whitespace-pre-line">{n.message}</p>
               <div class="flex items-center gap-3 mt-2">
                 <span class="text-xs text-ink-500">{new Date(n.created_at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}</span>
-                {#if n.action_url}<button on:click={() => pick(n)} class="text-xs text-ink-950 hover:underline">Buka detail</button>{/if}
+                <button on:click={() => pick(n)} class="text-xs text-ink-950 hover:underline">Buka detail</button>
                 <button on:click={() => del(n.id)} class="text-xs text-red-600 hover:underline ml-auto">Hapus</button>
               </div>
             </div>

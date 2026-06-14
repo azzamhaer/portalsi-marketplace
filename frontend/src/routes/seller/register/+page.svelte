@@ -77,8 +77,8 @@
   <div class="card mt-6 max-w-2xl">
     <h3 class="font-semibold mb-4">Formulir Pendaftaran</h3>
     <form on:submit={submit} class="space-y-4">
-      <div><label class="label">Nama Toko</label><input class="input" bind:value={name} required /></div>
-      <div><label class="label">Deskripsi Toko</label><textarea class="input" rows={3} bind:value={description} required /></div>
+      <div><label class="label">Nama Toko <span class="text-red-600">*</span></label><input class="input" bind:value={name} required /></div>
+      <div><label class="label">Deskripsi Toko <span class="text-red-600">*</span></label><textarea class="input" rows={3} bind:value={description} required></textarea></div>
       <AddressFields bind:value={address} contact={false} title="Alamat Toko" />
       <div class="grid sm:grid-cols-3 gap-3">
         <div><label class="label">Bank</label>

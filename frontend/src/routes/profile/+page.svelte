@@ -2,7 +2,7 @@
   import Icon from '$lib/components/Icon.svelte';
   import MapPicker from '$lib/components/MapPicker.svelte';
   import AddressFields from '$lib/components/AddressFields.svelte';
-  import { auth, toast, confirmDialog } from '$lib/stores.svelte';
+  import { auth, cart, wishlist, toast, confirmDialog } from '$lib/stores.svelte';
   import { apiEndpoints, setToken } from '$lib/api';
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
@@ -12,6 +12,7 @@
   let name = $state(''), phone = $state(''), saving = $state(false);
   let addresses = $state<any[]>([]);
   let editing = $state<any>(null);
+  let addressFormOpen = $state(false);
   let formAddr = $state<any>({ recipient:'', phone:'', country:'Indonesia', province:'', city:'', district:'', village:'', full_address:'', postal_code:'', address_note:'', latitude:null, longitude:null, is_default:false });
 
   // Change password state
@@ -39,7 +40,11 @@
   }
   async function logout() {
     try { await apiEndpoints.logout(); } catch {}
-    setToken(null); auth.clear(); goto('/');
+    setToken(null);
+    auth.clear();
+    cart.clear();
+    wishlist.clear();
+    goto('/');
   }
 
   async function changePassword(e: Event) {
@@ -67,6 +72,7 @@
 
   function openAddrForm(a: any | null) {
     editing = a;
+    addressFormOpen = true;
     formAddr = a ? { country: 'Indonesia', ...a } : { recipient: name, phone, country:'Indonesia', province:'', city:'', district:'', village:'', full_address:'', postal_code:'', address_note:'', latitude: null, longitude: null, is_default: addresses.length === 0 };
   }
 
@@ -77,6 +83,7 @@
       else await apiEndpoints.saveAddress(formAddr);
       addresses = await apiEndpoints.addresses();
       editing = null;
+      addressFormOpen = false;
       toast.success('Alamat disimpan');
     } catch (e: any) { toast.error(e.message); }
   }
@@ -174,7 +181,7 @@
             <h3 class="font-semibold">Alamat</h3>
             <button on:click={() => openAddrForm(null)} class="btn-outline btn-sm"><Icon name="plus" size={12} /> Tambah</button>
           </div>
-          {#if addresses.length === 0 && !editing}
+          {#if addresses.length === 0 && !addressFormOpen}
             <p class="text-sm text-ink-500">Belum ada alamat tersimpan.</p>
           {/if}
           {#each addresses as a (a.id)}
@@ -195,7 +202,7 @@
           {/each}
         </div>
 
-        {#if editing !== null}
+        {#if addressFormOpen}
           <div class="card">
             <h3 class="font-semibold mb-4">{editing?.id ? 'Edit' : 'Tambah'} Alamat</h3>
             <form on:submit={saveAddr} class="space-y-3">
@@ -207,7 +214,7 @@
               <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={formAddr.is_default} /> Jadikan alamat utama</label>
               <div class="flex gap-2">
                 <button class="btn-primary btn-md">Simpan</button>
-                <button type="button" on:click={() => editing = null} class="btn-outline btn-md">Batal</button>
+                <button type="button" on:click={() => { editing = null; addressFormOpen = false; }} class="btn-outline btn-md">Batal</button>
               </div>
             </form>
           </div>
