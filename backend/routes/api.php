@@ -120,6 +120,8 @@ Route::middleware('auth:sanctum')->group(function () {
     /* Admin */
     Route::middleware('admin')->prefix('admin')->group(function () {
         Route::get('/stats',                  [AdminController::class, 'stats']);
+        Route::get('/fresh-start/summary',    [AdminController::class, 'freshStartSummary']);
+        Route::post('/fresh-start',           [AdminController::class, 'freshStart']);
         Route::get('/users',                  [AdminController::class, 'users']);
         Route::get('/users/{id}',             [AdminController::class, 'userDetail']);
         Route::put('/users/{id}',             [AdminController::class, 'updateUser']);

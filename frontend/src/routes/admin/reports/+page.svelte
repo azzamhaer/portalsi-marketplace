@@ -6,6 +6,8 @@
 
   let groups = $state<any[]>([]);
   let loading = $state(true);
+  let mounted = $state(false);
+  let loadToken = 0;
   let status = $state<'OPEN' | 'ALL' | 'RESOLVED' | 'REJECTED' | 'REVIEWING'>('OPEN');
   let cats = $state<Record<string, string>>({});
 
@@ -17,16 +19,27 @@
   let actStatus = $state<'RESOLVED'|'REJECTED'|'REVIEWING'>('RESOLVED');
 
   async function load() {
+    const token = ++loadToken;
     loading = true;
     try {
       groups = await apiEndpoints.adminReports(`status=${status}`);
-    } catch (e: any) { toast.error(e.message); } finally { loading = false; }
+    } catch (e: any) {
+      groups = [];
+      toast.error(e.message || 'Gagal memuat laporan');
+    } finally {
+      if (token === loadToken) loading = false;
+    }
   }
   onMount(async () => {
-    cats = await apiEndpoints.reportCategories();
-    load();
+    try {
+      cats = await apiEndpoints.reportCategories();
+    } catch {
+      cats = {};
+    }
+    mounted = true;
+    await load();
   });
-  $effect(() => { void status; if (!loading) load(); });
+  $effect(() => { void status; if (mounted) load(); });
 
   function openGroup(g: any) {
     active = g;

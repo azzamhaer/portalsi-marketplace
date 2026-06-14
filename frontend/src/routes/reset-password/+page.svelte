@@ -1,11 +1,17 @@
 <script lang="ts">
   import { page } from '$app/stores';
-  import { apiEndpoints } from '$lib/api';
-  import { toast } from '$lib/stores.svelte';
+  import { apiEndpoints, setToken } from '$lib/api';
+  import { auth, toast } from '$lib/stores.svelte';
   import { goto } from '$app/navigation';
+  import { onMount } from 'svelte';
 
   const token = $derived($page.url.searchParams.get('token') || '');
   let pwd = $state(''), confirm = $state(''), saving = $state(false);
+
+  onMount(() => {
+    setToken(null);
+    auth.clear();
+  });
 
   async function submit(e: Event) {
     e.preventDefault();

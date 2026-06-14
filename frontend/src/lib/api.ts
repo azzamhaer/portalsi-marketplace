@@ -157,6 +157,8 @@ export const apiEndpoints = {
 
   /* admin */
   adminStats:        () => api('/admin/stats'),
+  adminFreshStartSummary: () => api('/admin/fresh-start/summary'),
+  adminFreshStart:   () => api('/admin/fresh-start', { method: 'POST', body: { confirm: 'FRESH_START' } as any }),
   adminUsers:        (q='') => api('/admin/users' + (q ? '?'+q : '')),
   adminUser:         (id: number) => api(`/admin/users/${id}`),
   adminDeleteUser:   (id: number) => api(`/admin/users/${id}`, { method: 'DELETE' }),

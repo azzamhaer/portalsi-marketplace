@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { apiEndpoints } from '$lib/api';
-  import { toast } from '$lib/stores.svelte';
+  import { toast, confirmDialog } from '$lib/stores.svelte';
   import Icon from '$lib/components/Icon.svelte';
 
   let tags = $state<any[]>([]);
@@ -72,7 +72,13 @@
   }
 
   async function deleteTag(id: number) {
-    if (!confirm('Hapus tag ini? Produk yang memakai tag ini akan dilepas dari tag tersebut.')) return;
+    const ok = await confirmDialog.ask({
+      title: 'Hapus tag ini?',
+      message: 'Produk yang memakai tag ini akan dilepas dari tag tersebut.',
+      confirmText: 'Hapus tag',
+      tone: 'danger',
+    });
+    if (!ok) return;
     try {
       await apiEndpoints.adminDeleteTag(id);
       toast.success('Tag dihapus');
@@ -125,7 +131,13 @@
   }
 
   async function deleteCategory(id: string) {
-    if (!confirm('Hapus kategori ini? Kategori yang punya produk/subkategori tidak bisa dihapus.')) return;
+    const ok = await confirmDialog.ask({
+      title: 'Hapus kategori ini?',
+      message: 'Kategori yang masih punya produk atau subkategori tidak bisa dihapus.',
+      confirmText: 'Hapus kategori',
+      tone: 'danger',
+    });
+    if (!ok) return;
     try {
       await apiEndpoints.adminDeleteCategory(id);
       toast.success('Kategori dihapus');
@@ -186,6 +198,12 @@
             </div>
             <div>
               <label class="label">Icon kategori</label>
+              <div class="mb-2 flex flex-wrap items-center gap-2 rounded-xl bg-ink-50 px-3 py-2 text-xs text-ink-600">
+                <Icon name="external-link" size={12} />
+                <span>Cari nama icon di</span>
+                <a href="https://lucide.dev/icons/" target="_blank" rel="noreferrer" class="font-semibold text-ink-950 underline">Lucide Icons</a>
+                <span>lalu tempel namanya di bawah.</span>
+              </div>
               <div class="grid grid-cols-5 gap-2">
                 {#each iconPresets as icon}
                   <button type="button" on:click={() => categoryForm.icon = icon} class="grid h-10 place-items-center rounded-xl border transition" class:border-ink-950={categoryForm.icon === icon} class:bg-ink-50={categoryForm.icon === icon} class:border-ink-100={categoryForm.icon !== icon} title={icon}>

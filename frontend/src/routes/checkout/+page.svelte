@@ -1,5 +1,6 @@
 <script lang="ts">
   import Icon from '$lib/components/Icon.svelte';
+  import AddressFields from '$lib/components/AddressFields.svelte';
   import { cart, auth, toast, confirmDialog } from '$lib/stores.svelte';
   import { apiEndpoints } from '$lib/api';
   import { fmtRp } from '$lib/utils';
@@ -17,25 +18,9 @@
     { name: 'Pos Indonesia', eta: '3-5 hari', cost: 9000 },
   ];
 
-  const CITIES = [
-    'DKI Jakarta - Jakarta Pusat',
-    'DKI Jakarta - Jakarta Selatan',
-    'DKI Jakarta - Jakarta Barat',
-    'Jawa Barat - Bandung',
-    'Jawa Barat - Bekasi',
-    'Jawa Barat - Depok',
-    'Jawa Tengah - Semarang',
-    'DI Yogyakarta - Yogyakarta',
-    'Jawa Timur - Surabaya',
-    'Banten - Tangerang',
-    'Sumatera Utara - Medan',
-    'Bali - Denpasar',
-  ];
-
-  let recipient = $state('');
-  let phone = $state('');
-  let city = $state(CITIES[0]);
-  let full = $state('');
+  let ship = $state<any>({ recipient: '', phone: '', country: 'Indonesia', province: '', city: '', district: '', village: '', postal_code: '', full_address: '', address_note: '' });
+  let addresses = $state<any[]>([]);
+  let selectedAddressId = $state('');
   let notes = $state('');
   let courier = $state(COURIERS[0]);
   let pay = $state<string | null>(null);
@@ -61,12 +46,23 @@
     return g;
   });
 
-  onMount(() => {
+  onMount(async () => {
     if (!auth.user) { goto('/login?next=/checkout'); return; }
     if (items.length === 0) { goto('/cart'); return; }
-    recipient = auth.user.name || '';
-    phone = auth.user.phone || '';
+    ship = { ...ship, recipient: auth.user.name || '', phone: auth.user.phone || '' };
+    try {
+      addresses = await apiEndpoints.addresses();
+      const def = addresses.find((a) => a.is_default) || addresses[0];
+      if (def) chooseAddress(String(def.id));
+    } catch {}
   });
+
+  function chooseAddress(id: string) {
+    selectedAddressId = id;
+    const a = addresses.find((x) => String(x.id) === id);
+    if (!a) return;
+    ship = { country: 'Indonesia', ...a };
+  }
 
   function clearVoucher(productId: number) {
     delete appliedVouchers[productId];
@@ -96,7 +92,10 @@
   }
 
   async function submit() {
-    if (!recipient || !phone || !full) { toast.warn('Lengkapi alamat'); return; }
+    if (!ship.recipient || !ship.phone || !ship.province || !ship.city || !ship.district || !ship.village || !ship.full_address) {
+      toast.warn('Lengkapi alamat pengiriman');
+      return;
+    }
     if (!pay) { toast.warn('Pilih metode pembayaran'); return; }
     const ok = await confirmDialog.ask({
       title: 'Buat pesanan?',
@@ -113,10 +112,16 @@
           variant_selection: i.variant_selection ?? null,
           voucher_code: appliedVouchers[i.product_id]?.code ?? null,
         })),
-        recipient,
-        phone,
-        city,
-        full_address: full,
+        recipient: ship.recipient,
+        phone: ship.phone,
+        country: 'Indonesia',
+        province: ship.province,
+        city: ship.city,
+        district: ship.district,
+        village: ship.village,
+        postal_code: ship.postal_code,
+        full_address: ship.full_address,
+        address_note: ship.address_note,
         notes,
         courier_name: courier.name,
         courier_eta: courier.eta,
@@ -142,16 +147,19 @@
     <div class="space-y-6">
       <div class="card">
         <h3 class="font-semibold mb-4 flex items-center gap-2"><Icon name="truck" size={16} class="text-ink-500" /> Alamat Pengiriman</h3>
-        <div class="grid sm:grid-cols-2 gap-4">
-          <div><label class="label">Nama Penerima</label><input class="input" bind:value={recipient} required /></div>
-          <div><label class="label">Nomor HP</label><input class="input" bind:value={phone} placeholder="0812xxxxxxxx" required /></div>
-        </div>
-        <div class="mt-4">
-          <label class="label">Kota</label>
-          <select class="input" bind:value={city}>{#each CITIES as c}<option>{c}</option>{/each}</select>
-        </div>
-        <div class="mt-4"><label class="label">Alamat Lengkap</label><textarea class="input" rows={3} bind:value={full} required></textarea></div>
-        <div class="mt-4"><label class="label">Catatan (opsional)</label><textarea class="input" rows={2} bind:value={notes}></textarea></div>
+        {#if addresses.length}
+          <div class="mb-4">
+            <label class="label">Pilih alamat tersimpan</label>
+            <select class="input" bind:value={selectedAddressId} on:change={(e) => chooseAddress((e.currentTarget as HTMLSelectElement).value)}>
+              <option value="">Isi alamat baru</option>
+              {#each addresses as a}
+                <option value={a.id}>{a.recipient} - {a.full_address}, {a.city}</option>
+              {/each}
+            </select>
+          </div>
+        {/if}
+        <AddressFields bind:value={ship} />
+        <div class="mt-4"><label class="label">Catatan pesanan (opsional)</label><textarea class="input" rows={2} bind:value={notes}></textarea></div>
       </div>
 
       <div class="card">

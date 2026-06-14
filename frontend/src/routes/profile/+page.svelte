@@ -1,7 +1,8 @@
 <script lang="ts">
   import Icon from '$lib/components/Icon.svelte';
   import MapPicker from '$lib/components/MapPicker.svelte';
-  import { auth, toast } from '$lib/stores.svelte';
+  import AddressFields from '$lib/components/AddressFields.svelte';
+  import { auth, toast, confirmDialog } from '$lib/stores.svelte';
   import { apiEndpoints, setToken } from '$lib/api';
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
@@ -11,7 +12,7 @@
   let name = $state(''), phone = $state(''), saving = $state(false);
   let addresses = $state<any[]>([]);
   let editing = $state<any>(null);
-  let formAddr = $state<any>({ recipient:'', phone:'', city:'', full_address:'', postal_code:'', latitude:null, longitude:null, is_default:false });
+  let formAddr = $state<any>({ recipient:'', phone:'', country:'Indonesia', province:'', city:'', district:'', village:'', full_address:'', postal_code:'', address_note:'', latitude:null, longitude:null, is_default:false });
 
   // Change password state
   let cpOld = $state(''), cpNew = $state(''), cpConfirm = $state(''), cpSaving = $state(false);
@@ -60,13 +61,13 @@
     try {
       await apiEndpoints.requestChangeEmail(newEmail);
       newEmail = '';
-      toast.success('Link konfirmasi sudah dikirim ke email baru');
+      toast.success('Link persetujuan sudah dikirim ke email saat ini');
     } catch (e: any) { toast.error(e.message); } finally { ceSaving = false; }
   }
 
   function openAddrForm(a: any | null) {
     editing = a;
-    formAddr = a ? { ...a } : { recipient: name, phone, city:'', full_address:'', postal_code:'', latitude: null, longitude: null, is_default: addresses.length === 0 };
+    formAddr = a ? { country: 'Indonesia', ...a } : { recipient: name, phone, country:'Indonesia', province:'', city:'', district:'', village:'', full_address:'', postal_code:'', address_note:'', latitude: null, longitude: null, is_default: addresses.length === 0 };
   }
 
   async function saveAddr(e: Event) {
@@ -80,7 +81,13 @@
     } catch (e: any) { toast.error(e.message); }
   }
   async function delAddr(id: number) {
-    if (!confirm('Hapus alamat?')) return;
+    const ok = await confirmDialog.ask({
+      title: 'Hapus alamat?',
+      message: 'Alamat ini akan dihapus dari daftar alamat pengiriman Anda.',
+      confirmText: 'Hapus alamat',
+      tone: 'danger',
+    });
+    if (!ok) return;
     try { await apiEndpoints.deleteAddress(id); addresses = await apiEndpoints.addresses(); }
     catch (e: any) { toast.error(e.message); }
   }
@@ -106,7 +113,7 @@
 
       <div class="card">
         <h3 class="font-semibold mb-4 flex items-center gap-2"><Icon name="mail" size={16} /> Ubah Email</h3>
-        <p class="text-xs text-ink-500 mb-3">Link konfirmasi akan dikirim ke email baru. Email aktif setelah Anda klik link konfirmasi.</p>
+        <p class="text-xs text-ink-500 mb-3">Link persetujuan akan dikirim ke email saat ini. Email baru aktif setelah link disetujui.</p>
         <form on:submit={changeEmail} class="flex gap-2">
           <input type="email" bind:value={newEmail} class="input flex-1" placeholder="email-baru@contoh.com" required />
           <button disabled={ceSaving} class="btn-primary btn-md">{ceSaving ? 'Mengirim…' : 'Kirim konfirmasi'}</button>
@@ -115,6 +122,7 @@
 
       <div class="card">
         <h3 class="font-semibold mb-4 flex items-center gap-2"><Icon name="lock" size={16} /> Ubah Password</h3>
+        <p class="text-xs text-ink-500 mb-3">Lupa password lama? Gunakan <a href="/forgot-password" class="link">reset password via email</a>.</p>
         <form on:submit={changePassword} class="space-y-3 max-w-md">
           <div><label class="label">Password lama</label><input type="password" bind:value={cpOld} class="input" required /></div>
           <div><label class="label">Password baru</label><input type="password" bind:value={cpNew} class="input" required minlength="6" /></div>
@@ -143,7 +151,7 @@
 
         <div class="card">
           <h3 class="font-semibold mb-3 flex items-center gap-2"><Icon name="mail" size={16} /> Ubah Email</h3>
-          <p class="text-xs text-ink-500 mb-3">Link konfirmasi dikirim ke email baru. Email aktif setelah Anda klik link konfirmasi.</p>
+          <p class="text-xs text-ink-500 mb-3">Link persetujuan dikirim ke email saat ini. Email baru aktif setelah link disetujui.</p>
           <form on:submit={changeEmail} class="flex gap-2">
             <input type="email" bind:value={newEmail} class="input flex-1" placeholder="email-baru@contoh.com" required />
             <button disabled={ceSaving} class="btn-primary btn-md">{ceSaving ? 'Mengirim…' : 'Kirim'}</button>
@@ -152,6 +160,7 @@
 
         <div class="card">
           <h3 class="font-semibold mb-3 flex items-center gap-2"><Icon name="lock" size={16} /> Ubah Password</h3>
+          <p class="text-xs text-ink-500 mb-3">Lupa password lama? Gunakan <a href="/forgot-password" class="link">reset password via email</a>.</p>
           <form on:submit={changePassword} class="space-y-3 max-w-md">
             <div><label class="label">Password lama</label><input type="password" bind:value={cpOld} class="input" required /></div>
             <div><label class="label">Password baru</label><input type="password" bind:value={cpNew} class="input" required minlength="6" /></div>
@@ -173,7 +182,9 @@
               <Icon name="map-pin" size={18} class="text-ink-500 mt-0.5" />
               <div class="flex-1">
                 <div class="flex items-center gap-2"><b>{a.recipient}</b> <span class="text-xs text-ink-500">{a.phone}</span> {#if a.is_default}<span class="pill-ink">Utama</span>{/if}</div>
-                <div class="text-sm text-ink-600 mt-0.5">{a.full_address}, {a.city}</div>
+                <div class="text-sm text-ink-600 mt-0.5">
+                  {a.full_address}, {a.village ? `${a.village}, ` : ''}{a.district ? `${a.district}, ` : ''}{a.city}{a.province ? `, ${a.province}` : ''}{a.postal_code ? ` ${a.postal_code}` : ''}
+                </div>
                 {#if a.latitude && a.longitude}
                   <a href={`https://www.google.com/maps?q=${a.latitude},${a.longitude}`} target="_blank" class="text-xs text-blue-600 mt-1 inline-flex items-center gap-1">Lihat di Maps <Icon name="external-link" size={10} /></a>
                 {/if}
@@ -188,15 +199,7 @@
           <div class="card">
             <h3 class="font-semibold mb-4">{editing?.id ? 'Edit' : 'Tambah'} Alamat</h3>
             <form on:submit={saveAddr} class="space-y-3">
-              <div class="grid sm:grid-cols-2 gap-3">
-                <div><label class="label">Penerima</label><input bind:value={formAddr.recipient} class="input" required /></div>
-                <div><label class="label">No. HP</label><input bind:value={formAddr.phone} class="input" required /></div>
-              </div>
-              <div class="grid sm:grid-cols-[1fr_140px] gap-3">
-                <div><label class="label">Kota</label><input bind:value={formAddr.city} class="input" required /></div>
-                <div><label class="label">Kode Pos</label><input bind:value={formAddr.postal_code} class="input" /></div>
-              </div>
-              <div><label class="label">Alamat Lengkap</label><textarea bind:value={formAddr.full_address} class="input" rows={3} required></textarea></div>
+              <AddressFields bind:value={formAddr} />
               <div>
                 <label class="label">Pin Lokasi (opsional)</label>
                 <MapPicker bind:lat={formAddr.latitude} bind:lng={formAddr.longitude} />

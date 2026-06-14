@@ -18,13 +18,19 @@ class AddressController extends Controller
         $data = $request->validate([
             'recipient'    => 'required|string|max:255',
             'phone'        => 'required|string|max:20',
+            'country'      => 'nullable|string|max:80',
+            'province'     => 'required|string|max:255',
             'city'         => 'required|string|max:255',
+            'district'     => 'required|string|max:255',
+            'village'      => 'required|string|max:255',
             'full_address' => 'required|string',
             'postal_code'  => 'nullable|string|max:10',
+            'address_note' => 'nullable|string|max:1000',
             'latitude'     => 'nullable|numeric',
             'longitude'    => 'nullable|numeric',
             'is_default'   => 'sometimes|boolean',
         ]);
+        $data['country'] = $data['country'] ?? 'Indonesia';
         if (!empty($data['is_default'])) {
             $request->user()->addresses()->update(['is_default' => false]);
         }
@@ -38,13 +44,19 @@ class AddressController extends Controller
         $data = $request->validate([
             'recipient'    => 'sometimes|string|max:255',
             'phone'        => 'sometimes|string|max:20',
+            'country'      => 'nullable|string|max:80',
+            'province'     => 'sometimes|string|max:255',
             'city'         => 'sometimes|string|max:255',
+            'district'     => 'sometimes|string|max:255',
+            'village'      => 'sometimes|string|max:255',
             'full_address' => 'sometimes|string',
             'postal_code'  => 'nullable|string|max:10',
+            'address_note' => 'nullable|string|max:1000',
             'latitude'     => 'nullable|numeric',
             'longitude'    => 'nullable|numeric',
             'is_default'   => 'sometimes|boolean',
         ]);
+        if (array_key_exists('country', $data) && !$data['country']) $data['country'] = 'Indonesia';
         if (!empty($data['is_default'])) {
             $request->user()->addresses()->update(['is_default' => false]);
         }

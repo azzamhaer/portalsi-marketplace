@@ -1,8 +1,14 @@
 <script lang="ts">
   import { apiEndpoints } from '$lib/api';
-  import { toast } from '$lib/stores.svelte';
+  import { setToken } from '$lib/api';
+  import { auth, toast } from '$lib/stores.svelte';
+  import { onMount } from 'svelte';
 
   let email = $state(''), sending = $state(false), sent = $state(false);
+  onMount(() => {
+    setToken(null);
+    auth.clear();
+  });
   async function submit(e: Event) {
     e.preventDefault();
     sending = true;

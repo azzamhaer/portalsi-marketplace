@@ -68,6 +68,9 @@
         Daftar gratis di <a href="https://app.brevo.com" target="_blank" class="link">brevo.com</a>.
         Kalau dikosongkan, email tidak terkirim — sistem tetap jalan.
       </p>
+      <div class="mb-4 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">
+        Agar email tidak mudah masuk Spam, pastikan domain pengirim sudah diverifikasi di Brevo dan DNS SPF, DKIM, serta DMARC sudah aktif.
+      </div>
       <div class="grid sm:grid-cols-2 gap-3">
         <div class="sm:col-span-2">
           <label class="label">API Key</label>

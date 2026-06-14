@@ -148,7 +148,7 @@ class AuthController extends Controller
                 'Permintaan reset password',
                 "<p>Hai <b>" . htmlspecialchars($user->name) . "</b>,</p>
                  <p>Kami menerima permintaan untuk mereset password akun Anda. Klik tombol di bawah untuk mengatur password baru. Link berlaku selama 1 jam.</p>
-                 <p style='font-size:11px;color:#888;'>Kalau Anda tidak meminta, abaikan email ini.</p>",
+                 <p style='font-size:11px;color:#888;'>Kalau Anda tidak meminta, abaikan email ini. Jika email tidak terlihat di inbox, cek folder Spam/Promosi.</p>",
                 $url, 'Reset Password'
             )
         );
@@ -172,7 +172,7 @@ class AuthController extends Controller
         return response()->json(['ok' => true]);
     }
 
-    /* ---------- Change Email (kirim konfirmasi ke email baru) ---------- */
+    /* ---------- Change Email (konfirmasi ke email lama terlebih dahulu) ---------- */
     public function requestChangeEmail(Request $request)
     {
         $data = $request->validate(['new_email' => 'required|email|unique:users,email']);
@@ -191,24 +191,15 @@ class AuthController extends Controller
 
         $url = $this->frontendUrl() . '/confirm-email?token=' . urlencode($token);
         $this->brevo()->send(
-            $data['new_email'], $user->name,
-            'Konfirmasi Email Baru',
-            $this->brevo()->layout(
-                'Konfirmasi email baru',
-                "<p>Hai <b>" . htmlspecialchars($user->name) . "</b>,</p>
-                 <p>Anda meminta untuk mengganti email akun Anda menjadi <b>" . htmlspecialchars($data['new_email']) . "</b>. Klik tombol di bawah untuk mengkonfirmasi. Link berlaku selama 24 jam.</p>",
-                $url, 'Konfirmasi Email'
-            )
-        );
-
-        // Notif juga ke email lama
-        $this->brevo()->send(
             $user->email, $user->name,
-            'Permintaan ubah email akun',
+            'Konfirmasi Perubahan Email',
             $this->brevo()->layout(
-                'Permintaan ubah email',
+                'Konfirmasi perubahan email',
                 "<p>Hai <b>" . htmlspecialchars($user->name) . "</b>,</p>
-                 <p>Ada permintaan untuk mengubah email akun Anda menjadi <b>" . htmlspecialchars($data['new_email']) . "</b>. Jika ini bukan Anda, segera ubah password Anda.</p>"
+                 <p>Anda meminta untuk mengganti email akun menjadi <b>" . htmlspecialchars($data['new_email']) . "</b>.</p>
+                 <p>Demi keamanan, klik tombol di bawah dari email saat ini untuk menyetujui perubahan tersebut. Link berlaku selama 24 jam.</p>
+                 <p style='font-size:12px;color:#666;'>Jika Anda tidak meminta perubahan ini, abaikan email ini dan segera ubah password.</p>",
+                $url, 'Setujui Perubahan Email'
             )
         );
 
@@ -259,7 +250,8 @@ class AuthController extends Controller
             $this->brevo()->layout(
                 'Selamat datang!',
                 "<p>Hai <b>" . htmlspecialchars($user->name) . "</b>,</p>
-                 <p>Akun Anda berhasil dibuat. Klik tombol di bawah untuk memverifikasi email Anda dan menyelesaikan pendaftaran.</p>",
+                 <p>Akun Anda berhasil dibuat. Klik tombol di bawah untuk memverifikasi email Anda dan menyelesaikan pendaftaran.</p>
+                 <p style='font-size:12px;color:#666;'>Jika email verifikasi tidak terlihat di inbox, silakan cek folder Spam/Promosi.</p>",
                 $url, 'Verifikasi Email'
             )
         );

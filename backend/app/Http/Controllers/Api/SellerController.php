@@ -23,7 +23,12 @@ class SellerController extends Controller
 
         $data = $request->validate([
             'name'         => 'required|string|max:255',
+            'country'      => 'nullable|string|max:80',
+            'province'     => 'required|string|max:255',
             'city'         => 'required|string|max:255',
+            'district'     => 'required|string|max:255',
+            'village'      => 'required|string|max:255',
+            'postal_code'  => 'nullable|string|max:10',
             'description'  => 'required|string',
             'bank_name'    => 'nullable|string|max:50',
             'bank_account' => 'nullable|string|max:30',
@@ -32,6 +37,7 @@ class SellerController extends Controller
             'latitude'     => 'nullable|numeric',
             'longitude'    => 'nullable|numeric',
             'full_address' => 'nullable|string',
+            'address_note' => 'nullable|string|max:1000',
         ]);
 
         $color = '#' . substr(md5($data['name']), 0, 6);
@@ -44,10 +50,16 @@ class SellerController extends Controller
             'name'        => $data['name'],
             'slug'        => Str::slug($data['name']) . '-' . Str::random(4),
             'username'    => $username,
+            'country'     => $data['country'] ?? 'Indonesia',
+            'province'    => $data['province'],
             'city'        => $data['city'],
+            'district'    => $data['district'],
+            'village'     => $data['village'],
+            'postal_code' => $data['postal_code'] ?? null,
             'latitude'    => $data['latitude'] ?? null,
             'longitude'   => $data['longitude'] ?? null,
             'full_address'=> $data['full_address'] ?? null,
+            'address_note'=> $data['address_note'] ?? null,
             'description' => $data['description'],
             'avatar'      => $this->makeAvatar($data['name'][0] ?? 'S', $color),
             'banner'      => $this->makeBanner($data['name'], $color),
@@ -113,11 +125,17 @@ class SellerController extends Controller
         $vendor = $this->requireApprovedVendor($request);
         $data = $request->validate([
             'name'         => 'sometimes|string|max:255',
+            'country'      => 'nullable|string|max:80',
+            'province'     => 'sometimes|string|max:255',
             'city'         => 'sometimes|string|max:255',
+            'district'     => 'sometimes|string|max:255',
+            'village'      => 'sometimes|string|max:255',
+            'postal_code'  => 'nullable|string|max:10',
             'description'  => 'sometimes|string',
             'latitude'     => 'nullable|numeric',
             'longitude'    => 'nullable|numeric',
             'full_address' => 'nullable|string',
+            'address_note' => 'nullable|string|max:1000',
             'avatar'       => 'nullable|string',
             'banner'       => 'nullable|string',
             'bank_name'    => 'nullable|string|max:50',

@@ -306,17 +306,14 @@
     {@const navItems = isAdmin
       ? [
           ['Admin Center','/admin','layout-dashboard'],
-          ['Verifikasi Vendor','/admin/vendors?status=PENDING','store'],
-          ['Kelola Pesanan','/admin/orders','receipt-text'],
-          ['Laporan','/admin/reports','flag'],
-          ['Pengaturan','/admin/settings','settings'],
-          ['Lihat Toko','/vendors','storefront'],
-          ['Bantuan','/help','circle-help'],
+          ['Cari toko','/vendors','storefront'],
+          ['Opsi pembayaran','/payment-info','credit-card'],
+          ['FAQ','/help','circle-help'],
         ]
       : [
-          ['Toko','/vendors','storefront'],
-          ['Pembayaran','/payment-info','credit-card'],
-          ['Bantuan','/help','circle-help'],
+          ['Cari toko','/vendors','storefront'],
+          ['Opsi pembayaran','/payment-info','credit-card'],
+          ['FAQ','/help','circle-help'],
         ]}
     <div class="md:hidden border-t border-ink-100 bg-white animate-fadeIn max-h-[calc(100vh-64px)] overflow-y-auto overscroll-contain">
       <div class="container-x py-4 space-y-3 pb-8">
@@ -335,14 +332,21 @@
           {#if auth.user}
             {#if !isAdmin}
               {#if auth.user.vendor_id}
-                <a href={auth.user.vendor_status === 'APPROVED' ? '/seller/dashboard' : '/seller/pending'} on:click={() => mobileOpen = false} class="px-3 py-2.5 rounded-lg hover:bg-ink-50">
-                  {auth.user.vendor_status === 'APPROVED' ? 'Seller Center' : 'Status Toko'}
+                <a href={auth.user.vendor_status === 'APPROVED' ? '/seller/dashboard' : '/seller/pending'} on:click={() => mobileOpen = false} class="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-ink-50">
+                  <Icon name={auth.user.vendor_status === 'APPROVED' ? 'store' : 'clock'} size={16} class="text-ink-500" />
+                  <span>{auth.user.vendor_status === 'APPROVED' ? 'Seller Center' : 'Status Toko'}</span>
                 </a>
               {:else}
-                <a href="/seller/register" on:click={() => mobileOpen = false} class="px-3 py-2.5 rounded-lg hover:bg-ink-50">Buka Toko</a>
+                <a href="/seller/register" on:click={() => mobileOpen = false} class="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-ink-50">
+                  <Icon name="store" size={16} class="text-ink-500" />
+                  <span>Buka Toko</span>
+                </a>
               {/if}
             {/if}
-            <button on:click={() => { logout(); mobileOpen = false; }} class="text-left px-3 py-2.5 rounded-lg hover:bg-ink-50 text-red-600">Keluar</button>
+            <button on:click={() => { logout(); mobileOpen = false; }} class="flex items-center gap-3 text-left px-3 py-2.5 rounded-lg hover:bg-ink-50 text-red-600">
+              <Icon name="log-out" size={16} />
+              <span>Keluar</span>
+            </button>
           {:else}
             <a href="/login" on:click={() => mobileOpen = false} class="btn-primary btn-md mt-2">Masuk</a>
           {/if}

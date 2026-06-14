@@ -1,11 +1,13 @@
 <script lang="ts">
   import Icon from '$lib/components/Icon.svelte';
+  import AddressFields from '$lib/components/AddressFields.svelte';
   import { auth, toast } from '$lib/stores.svelte';
   import { apiEndpoints } from '$lib/api';
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
 
-  let name = $state(''), city = $state(''), description = $state('');
+  let name = $state(''), description = $state('');
+  let address = $state<any>({ country: 'Indonesia', province: '', city: '', district: '', village: '', postal_code: '', full_address: '', address_note: '' });
   let bank_name = $state('BCA'), bank_account = $state(''), bank_holder = $state('');
   let ktpData = $state('');
   let saving = $state(false);
@@ -37,7 +39,7 @@
     if (!ktpData) { toast.warn('Upload foto KTP terlebih dahulu'); return; }
     saving = true;
     try {
-      await apiEndpoints.sellerRegister({ name, city, description, bank_name, bank_account, bank_holder, ktp_image: ktpData });
+      await apiEndpoints.sellerRegister({ name, ...address, description, bank_name, bank_account, bank_holder, ktp_image: ktpData });
       const me: any = await apiEndpoints.me();
       auth.set(me);
       toast.success('Pendaftaran terkirim, menunggu verifikasi admin');
@@ -76,8 +78,8 @@
     <h3 class="font-semibold mb-4">Formulir Pendaftaran</h3>
     <form on:submit={submit} class="space-y-4">
       <div><label class="label">Nama Toko</label><input class="input" bind:value={name} required /></div>
-      <div><label class="label">Kota / Domisili</label><input class="input" bind:value={city} required /></div>
       <div><label class="label">Deskripsi Toko</label><textarea class="input" rows={3} bind:value={description} required /></div>
+      <AddressFields bind:value={address} contact={false} title="Alamat Toko" />
       <div class="grid sm:grid-cols-3 gap-3">
         <div><label class="label">Bank</label>
           <select class="input" bind:value={bank_name}>

@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import SellerSidebar from '$lib/components/SellerSidebar.svelte';
   import MapPicker from '$lib/components/MapPicker.svelte';
+  import AddressFields from '$lib/components/AddressFields.svelte';
   import Icon from '$lib/components/Icon.svelte';
   import VendorBadge from '$lib/components/VendorBadge.svelte';
   import { apiEndpoints } from '$lib/api';
@@ -55,6 +56,8 @@
     try {
       const payload: any = {
         name: v.name, city: v.city, description: v.description,
+        country: 'Indonesia', province: v.province, district: v.district, village: v.village,
+        postal_code: v.postal_code, address_note: v.address_note,
         latitude: v.latitude, longitude: v.longitude, full_address: v.full_address,
         bank_name: v.bank_name, bank_account: v.bank_account, bank_holder: v.bank_holder,
         avatar: v.avatar, banner: v.banner
@@ -193,10 +196,9 @@
           <form on:submit={save} class="space-y-4 max-w-2xl">
             <div class="grid sm:grid-cols-2 gap-3">
               <div><label class="label">Nama Toko</label><input bind:value={v.name} class="input" /></div>
-              <div><label class="label">Kota</label><input bind:value={v.city} class="input" /></div>
             </div>
             <div><label class="label">Deskripsi</label><textarea bind:value={v.description} class="input" rows={3}></textarea></div>
-            <div><label class="label">Alamat Lengkap</label><textarea bind:value={v.full_address} class="input" rows={2} placeholder="Jl. ..."></textarea></div>
+            <AddressFields bind:value={v} contact={false} title="Alamat Toko" />
             <div>
               <label class="label">Pin Lokasi Toko</label>
               <MapPicker bind:lat={v.latitude} bind:lng={v.longitude} />

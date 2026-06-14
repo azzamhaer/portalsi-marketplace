@@ -11,7 +11,7 @@
     try {
       const r: any = await apiEndpoints.register({ name, email, phone, password });
       setToken(r.token); auth.set(r.user);
-      toast.success('Berhasil daftar');
+      toast.success('Berhasil daftar. Cek email untuk verifikasi, termasuk folder Spam/Promosi.');
       goto('/');
     } catch (e: any) { toast.error(e.message); } finally { loading = false; }
   }

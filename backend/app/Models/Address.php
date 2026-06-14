@@ -8,7 +8,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Address extends Model
 {
-    protected $fillable = ['user_id', 'recipient', 'phone', 'city', 'latitude', 'longitude', 'full_address', 'postal_code', 'is_default'];
+    protected $fillable = [
+        'user_id', 'recipient', 'phone', 'country', 'province', 'city', 'district', 'village',
+        'latitude', 'longitude', 'full_address', 'postal_code', 'address_note', 'is_default',
+    ];
     protected $casts = ['is_default' => 'boolean', 'latitude' => 'float', 'longitude' => 'float'];
 
     public function user(): BelongsTo  { return $this->belongsTo(User::class); }

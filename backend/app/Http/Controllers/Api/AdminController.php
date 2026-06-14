@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Models\Vendor;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class AdminController extends Controller
@@ -27,6 +28,91 @@ class AdminController extends Controller
             'revenue'    => Order::whereIn('status', ['PROCESSING','SHIPPED','DONE'])->sum('total'),
             'pending_returns' => OrderReturn::where('status', 'PENDING')->count(),
         ]);
+    }
+
+    public function freshStartSummary()
+    {
+        return response()->json([
+            'users_removed' => User::where('role', '!=', 'ADMIN')->count(),
+            'admins_kept' => User::where('role', 'ADMIN')->count(),
+            'vendors' => Vendor::count(),
+            'products' => \App\Models\Product::count(),
+            'orders' => Order::count(),
+            'order_items' => \App\Models\OrderItem::count(),
+            'payments' => \App\Models\Payment::count(),
+            'returns' => OrderReturn::count(),
+            'chats' => \App\Models\ChatThread::count(),
+            'chat_messages' => \App\Models\ChatMessage::count(),
+            'reports' => \App\Models\Report::count(),
+            'notifications' => \App\Models\UserNotification::count(),
+            'wishlists' => \App\Models\Wishlist::count(),
+            'reviews' => \App\Models\Review::count(),
+            'withdrawals' => \App\Models\Withdrawal::count(),
+            'vouchers' => \App\Models\SellerVoucher::count(),
+            'kept' => [
+                'settings',
+                'shipping_options',
+                'payment_methods',
+                'faqs',
+                'categories',
+                'tags',
+                'admin_users',
+            ],
+        ]);
+    }
+
+    public function freshStart(Request $request)
+    {
+        $data = $request->validate([
+            'confirm' => 'required|in:FRESH_START',
+        ]);
+
+        DB::transaction(function () {
+            $nonAdminIds = User::where('role', '!=', 'ADMIN')->pluck('id');
+            Schema::disableForeignKeyConstraints();
+            try {
+                foreach ([
+                    'seller_voucher_product',
+                    'seller_vouchers',
+                    'product_tag',
+                    'reviews',
+                    'wishlists',
+                    'payments',
+                    'order_returns',
+                    'order_items',
+                    'orders',
+                    'chat_messages',
+                    'chat_threads',
+                    'reports',
+                    'user_notifications',
+                    'withdrawals',
+                    'vendor_followers',
+                    'products',
+                    'vendors',
+                    'email_verifications',
+                    'email_change_requests',
+                    'password_resets',
+                ] as $table) {
+                    if (Schema::hasTable($table)) {
+                        DB::table($table)->delete();
+                    }
+                }
+
+                if (Schema::hasTable('personal_access_tokens')) {
+                    DB::table('personal_access_tokens')->where('tokenable_type', User::class)
+                        ->whereIn('tokenable_id', $nonAdminIds)
+                        ->delete();
+                }
+
+                DB::table('addresses')->whereIn('user_id', $nonAdminIds)->delete();
+                User::where('role', '!=', 'ADMIN')->delete();
+                Tag::query()->update(['product_count' => 0]);
+            } finally {
+                Schema::enableForeignKeyConstraints();
+            }
+        });
+
+        return response()->json(['ok' => true, 'summary' => $this->freshStartSummary()->getData(true)]);
     }
 
     /* ---------- Users ---------- */

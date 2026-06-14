@@ -14,7 +14,8 @@ class Vendor extends Model
 
     protected $fillable = [
         'user_id', 'name', 'slug', 'username', 'username_changed_at',
-        'city', 'latitude', 'longitude', 'full_address',
+        'city', 'country', 'province', 'district', 'village', 'postal_code',
+        'latitude', 'longitude', 'full_address', 'address_note',
         'description', 'avatar', 'banner', 'ktp_image', 'verification_status', 'verification_note',
         'bank_name', 'bank_account', 'bank_holder',
         'rating', 'total_sold', 'followers', 'is_official', 'badge',
