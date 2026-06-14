@@ -30,18 +30,31 @@ class CatalogController extends Controller
         if (strlen($q) < 1) {
             return response()->json(['products' => [], 'vendors' => [], 'tags' => []]);
         }
-        $products = Product::where('is_active', true)
-            ->where('name', 'like', "%$q%")
-            ->select('id', 'name', 'slug', 'image', 'price')
-            ->take(6)->get();
-        $vendors = Vendor::where('verification_status', 'APPROVED')
-            ->where(fn($w) => $w->where('name', 'like', "%$q%")->orWhere('username', 'like', "%$q%"))
-            ->select('id', 'name', 'username', 'avatar', 'city')
-            ->take(4)->get();
-        $tags = Tag::where('slug', 'like', "%$q%")
-            ->orderByDesc('product_count')
-            ->select('slug', 'name', 'product_count')
-            ->take(6)->get();
+        $products = $this->rankedProductsForSearch($q, 6)
+            ->map(fn($p) => [
+                'id' => $p->id,
+                'name' => $p->name,
+                'slug' => $p->slug,
+                'image' => $p->image,
+                'price' => $p->price,
+            ])
+            ->values();
+        $vendors = $this->rankedVendorsForSearch($q, 4)
+            ->map(fn($v) => [
+                'id' => $v->id,
+                'name' => $v->name,
+                'username' => $v->username,
+                'avatar' => $v->avatar,
+                'city' => $v->city,
+            ])
+            ->values();
+        $tags = $this->rankedTagsForSearch($q, 6)
+            ->map(fn($t) => [
+                'slug' => $t->slug,
+                'name' => $t->name,
+                'product_count' => $t->product_count,
+            ])
+            ->values();
         return response()->json([
             'products' => $products,
             'vendors'  => $vendors,
@@ -74,11 +87,14 @@ class CatalogController extends Controller
         if ($vendor = $request->query('vendor')) {
             $q->where('vendor_id', $vendor);
         }
-        if ($search = $request->query('search', $request->query('q'))) {
-            $q->where(function ($qq) use ($search) {
-                $qq->where('name', 'like', "%$search%")
-                   ->orWhere('description', 'like', "%$search%");
-            });
+        $searchIds = null;
+        if ($search = trim((string) $request->query('search', $request->query('q', '')))) {
+            $searchIds = $this->rankedProductIdsForSearch($search);
+            if ($searchIds) {
+                $q->whereIn('id', $searchIds);
+            } else {
+                $q->whereRaw('1 = 0');
+            }
         }
         if ($min = $request->query('min_price')) $q->where('price', '>=', (int) $min);
         if ($max = $request->query('max_price')) $q->where('price', '<=', (int) $max);
@@ -97,13 +113,18 @@ class CatalogController extends Controller
         if ($ids = $request->query('ids')) $q->whereIn('id', explode(',', $ids));
 
         $sort = $request->query('sort', 'popular');
-        match ($sort) {
-            'cheap'   => $q->orderBy('price'),
-            'exp'     => $q->orderByDesc('price'),
-            'rating'  => $q->orderByDesc('rating'),
-            'newest'  => $q->orderByDesc('id'),
-            default   => $q->orderByDesc('sold'),
-        };
+        if ($searchIds && $sort === 'popular') {
+            $idsOrder = implode(',', array_map('intval', $searchIds));
+            $q->orderByRaw("FIELD(id, {$idsOrder})")->orderByDesc('sold');
+        } else {
+            match ($sort) {
+                'cheap'   => $q->orderBy('price'),
+                'exp'     => $q->orderByDesc('price'),
+                'rating'  => $q->orderByDesc('rating'),
+                'newest'  => $q->orderByDesc('id'),
+                default   => $q->orderByDesc('sold'),
+            };
+        }
 
         $perPage = min(100, (int) $request->query('per_page', 24));
         return response()->json($q->paginate($perPage));
@@ -205,5 +226,211 @@ class CatalogController extends Controller
             'recommended' => Product::where('is_active', true)->with('tagModels:id,slug')->withCount('reviews')->orderByDesc('sold')->take(24)->get(),
             'official'    => Vendor::where('is_official', true)->where('verification_status', 'APPROVED')->take(6)->get(),
         ]);
+    }
+
+    private function rankedProductIdsForSearch(string $query): array
+    {
+        return $this->rankedProductsForSearch($query, 500)->pluck('id')->all();
+    }
+
+    private function rankedProductsForSearch(string $query, int $limit)
+    {
+        $search = $this->prepareSearch($query);
+        if (!$search['tokens']) return collect();
+
+        $direct = $search['direct'];
+        $products = Product::where('is_active', true)
+            ->whereHas('vendor', fn($v) => $v->where('moderation_mode', '!=', 'DISABLED')->where('verification_status', 'APPROVED'))
+            ->with(['vendor:id,name,username,city,moderation_mode,verification_status', 'category:id,name,slug,tag_slug', 'tagModels:id,slug,name,product_count'])
+            ->select('id', 'vendor_id', 'category_id', 'name', 'slug', 'description', 'image', 'price', 'sold', 'rating')
+            ->where(function ($w) use ($direct) {
+                $w->where('name', 'like', "%{$direct}%")
+                  ->orWhere('description', 'like', "%{$direct}%")
+                  ->orWhereHas('tagModels', fn($t) => $t->where('slug', 'like', "%{$direct}%")->orWhere('name', 'like', "%{$direct}%"))
+                  ->orWhereHas('category', fn($c) => $c->where('name', 'like', "%{$direct}%")->orWhere('slug', 'like', "%{$direct}%"))
+                  ->orWhereHas('vendor', fn($v) => $v->where('name', 'like', "%{$direct}%")->orWhere('username', 'like', "%{$direct}%"));
+            })
+            ->limit(1400)
+            ->get();
+
+        if ($products->count() < 20) {
+            $fallback = Product::where('is_active', true)
+                ->whereHas('vendor', fn($v) => $v->where('moderation_mode', '!=', 'DISABLED')->where('verification_status', 'APPROVED'))
+                ->with(['vendor:id,name,username,city,moderation_mode,verification_status', 'category:id,name,slug,tag_slug', 'tagModels:id,slug,name,product_count'])
+                ->select('id', 'vendor_id', 'category_id', 'name', 'slug', 'description', 'image', 'price', 'sold', 'rating')
+                ->orderByDesc('sold')
+                ->limit(1200)
+                ->get();
+            $products = $products->merge($fallback)->unique('id')->values();
+        }
+
+        return $products
+            ->map(function ($product) use ($search) {
+                $product->search_score = $this->scoreSearchText($search, $this->productSearchText($product)) + min(15, (int) $product->sold / 3);
+                return $product;
+            })
+            ->filter(fn($product) => $product->search_score >= max(18, $search['base_count'] * 14))
+            ->sort(fn($a, $b) => [$b->search_score, $b->sold, $b->rating] <=> [$a->search_score, $a->sold, $a->rating])
+            ->take($limit)
+            ->values();
+    }
+
+    private function rankedVendorsForSearch(string $query, int $limit)
+    {
+        $search = $this->prepareSearch($query);
+        if (!$search['tokens']) return collect();
+
+        return Vendor::where('verification_status', 'APPROVED')
+            ->where('moderation_mode', '!=', 'DISABLED')
+            ->select('id', 'name', 'username', 'avatar', 'city', 'description', 'total_sold', 'rating')
+            ->orderByDesc('total_sold')
+            ->limit(400)
+            ->get()
+            ->map(function ($vendor) use ($search) {
+                $vendor->search_score = $this->scoreSearchText($search, "{$vendor->name} {$vendor->username} {$vendor->city} {$vendor->description}") + min(10, (int) $vendor->total_sold / 5);
+                return $vendor;
+            })
+            ->filter(fn($vendor) => $vendor->search_score >= max(15, $search['base_count'] * 12))
+            ->sort(fn($a, $b) => [$b->search_score, $b->total_sold, $b->rating] <=> [$a->search_score, $a->total_sold, $a->rating])
+            ->take($limit)
+            ->values();
+    }
+
+    private function rankedTagsForSearch(string $query, int $limit)
+    {
+        $search = $this->prepareSearch($query);
+        if (!$search['tokens']) return collect();
+
+        return Tag::select('slug', 'name', 'product_count')
+            ->orderByDesc('product_count')
+            ->limit(500)
+            ->get()
+            ->map(function ($tag) use ($search) {
+                $tag->search_score = $this->scoreSearchText($search, "{$tag->slug} {$tag->name}") + min(12, (int) $tag->product_count / 4);
+                return $tag;
+            })
+            ->filter(fn($tag) => $tag->search_score >= 14)
+            ->sort(fn($a, $b) => [$b->search_score, $b->product_count] <=> [$a->search_score, $a->product_count])
+            ->take($limit)
+            ->values();
+    }
+
+    private function prepareSearch(string $query): array
+    {
+        $normalized = $this->normalizeSearchText($query);
+        $tokens = [];
+        $baseTokens = [];
+        foreach (preg_split('/\s+/', $normalized) ?: [] as $token) {
+            $token = trim($token);
+            if ($token === '' || in_array($token, $this->searchStopWords(), true)) continue;
+            $base = $this->stemSearchToken($token);
+            $baseTokens[] = $base;
+            $tokens[] = $base;
+            foreach ($this->searchSynonyms()[$token] ?? [] as $synonym) {
+                $tokens[] = $this->stemSearchToken($synonym);
+            }
+        }
+
+        return [
+            'direct' => $normalized,
+            'base_count' => max(1, count(array_unique(array_filter($baseTokens)))),
+            'tokens' => array_values(array_unique(array_filter($tokens, fn($t) => strlen($t) >= 2))),
+        ];
+    }
+
+    private function productSearchText(Product $product): string
+    {
+        $tags = $product->tagModels?->map(fn($t) => "{$t->slug} {$t->name}")->implode(' ') ?? '';
+        $category = $product->category ? "{$product->category->name} {$product->category->slug} {$product->category->tag_slug}" : '';
+        $vendor = $product->vendor ? "{$product->vendor->name} {$product->vendor->username} {$product->vendor->city}" : '';
+        return "{$product->name} {$product->description} {$tags} {$category} {$vendor}";
+    }
+
+    private function scoreSearchText(array $search, string $text): int
+    {
+        $haystack = $this->normalizeSearchText($text);
+        $hayTokens = array_values(array_unique(array_filter(array_map(
+            fn($token) => $this->stemSearchToken($token),
+            preg_split('/\s+/', $haystack) ?: []
+        ), fn($token) => strlen($token) >= 2)));
+
+        if (!$hayTokens || !$search['tokens']) return 0;
+
+        $score = 0;
+        if ($search['direct'] && str_contains($haystack, $search['direct'])) {
+            $score += 90;
+        }
+
+        foreach ($search['tokens'] as $needle) {
+            $best = 0;
+            foreach ($hayTokens as $token) {
+                if ($token === $needle) {
+                    $best = max($best, 45);
+                } elseif (str_contains($token, $needle) || str_contains($needle, $token)) {
+                    $best = max($best, 34);
+                } else {
+                    $sim = $this->tokenSimilarity($needle, $token);
+                    if ($sim >= 0.86) $best = max($best, 30);
+                    elseif ($sim >= 0.76) $best = max($best, 22);
+                    elseif ($sim >= 0.66) $best = max($best, 14);
+                }
+            }
+            $score += $best;
+        }
+
+        return $score;
+    }
+
+    private function normalizeSearchText(string $text): string
+    {
+        $text = strtolower($text);
+        $text = preg_replace('/[^a-z0-9\s-]+/u', ' ', $text) ?? $text;
+        $text = str_replace('-', ' ', $text);
+        return trim(preg_replace('/\s+/', ' ', $text) ?? $text);
+    }
+
+    private function stemSearchToken(string $token): string
+    {
+        $token = preg_replace('/^(me|mem|men|meng|meny|ber|ter|di|ke|se|pe|pem|pen|peng|peny)/', '', $token) ?? $token;
+        $token = preg_replace('/(nya|lah|kah|ku|mu|an|kan|i)$/', '', $token) ?? $token;
+        return $token ?: '';
+    }
+
+    private function tokenSimilarity(string $a, string $b): float
+    {
+        if ($a === $b) return 1.0;
+        $max = max(strlen($a), strlen($b));
+        if ($max === 0) return 0.0;
+        return max(0, 1 - (levenshtein($a, $b) / $max));
+    }
+
+    private function searchStopWords(): array
+    {
+        return [
+            'untuk', 'buat', 'yang', 'dan', 'atau', 'di', 'ke', 'dari', 'dengan', 'ini', 'itu',
+            'ada', 'cari', 'mencari', 'produk', 'barang', 'beli', 'ingin', 'mau',
+            'the', 'for', 'and', 'or', 'with', 'of', 'a', 'an',
+        ];
+    }
+
+    private function searchSynonyms(): array
+    {
+        return [
+            'jogging' => ['joging', 'lari', 'running', 'run'],
+            'joging' => ['jogging', 'lari', 'running', 'run'],
+            'running' => ['jogging', 'joging', 'lari'],
+            'lari' => ['jogging', 'joging', 'running'],
+            'hp' => ['handphone', 'smartphone', 'ponsel'],
+            'handphone' => ['hp', 'smartphone', 'ponsel'],
+            'smartphone' => ['hp', 'handphone', 'ponsel'],
+            'ponsel' => ['hp', 'handphone', 'smartphone'],
+            'baju' => ['kaos', 'shirt', 'kemeja', 'pakaian'],
+            'kaos' => ['baju', 'shirt', 'pakaian'],
+            'sepatu' => ['sneakers', 'shoes'],
+            'sneakers' => ['sepatu', 'shoes'],
+            'tas' => ['bag'],
+            'makeup' => ['kosmetik', 'kecantikan'],
+            'kosmetik' => ['makeup', 'kecantikan'],
+        ];
     }
 }

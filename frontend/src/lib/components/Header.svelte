@@ -151,7 +151,7 @@
           <input bind:value={q} on:input={onQueryInput} on:focus={() => { if (q.trim()) suggestOpen = true; }} type="text" placeholder="Cari produk, brand, atau toko" class="flex-1 bg-transparent text-sm outline-none placeholder:text-ink-400" />
           <button type="submit" class="text-xs bg-app-primary text-app-pfg px-3.5 py-1.5 rounded-full font-medium hover:bg-ink-800 transition-colors">Cari</button>
         </form>
-        {#if suggestOpen && (suggestions.products.length || suggestions.vendors.length || suggestions.tags.length || suggestLoading)}
+        {#if suggestOpen && (suggestions.products.length || suggestions.vendors.length || suggestions.tags.length || suggestLoading || q.trim())}
           <div class="absolute left-0 right-0 top-full mt-1 bg-white rounded-2xl shadow-elevated border border-ink-100 p-2 animate-fadeIn z-50 max-h-[400px] overflow-y-auto">
             {#if suggestLoading}
               <div class="text-xs text-ink-500 p-3">Mencari…</div>
