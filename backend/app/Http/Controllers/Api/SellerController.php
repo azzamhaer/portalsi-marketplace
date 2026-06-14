@@ -13,6 +13,7 @@ use App\Support\ReservedUsernames;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class SellerController extends Controller
 {
@@ -142,6 +143,12 @@ class SellerController extends Controller
             'bank_account' => 'nullable|string|max:30',
             'bank_holder'  => 'nullable|string|max:255',
         ]);
+
+        foreach (['avatar' => 2, 'banner' => 3] as $field => $maxMb) {
+            if (array_key_exists($field, $data) && $data[$field]) {
+                $this->validateInlineImage($data[$field], $field === 'avatar' ? 'Foto profil' : 'Banner', $maxMb);
+            }
+        }
 
         $vendor->update($data);
         return response()->json($vendor);
@@ -516,5 +523,42 @@ SVG;
         $label = htmlspecialchars(mb_substr($name, 0, 16));
         $svg = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 400'><rect width='400' height='400' fill='{$color}'/><text x='200' y='220' text-anchor='middle' font-size='28' font-weight='700' fill='#fff' font-family='Inter,sans-serif'>{$label}</text></svg>";
         return 'data:image/svg+xml;utf8,' . rawurlencode($svg);
+    }
+
+    private function validateInlineImage(string $value, string $label, int $maxMb): void
+    {
+        if (str_starts_with($value, 'data:image/svg+xml;utf8,')) {
+            if (strlen($value) > 200 * 1024) {
+                throw ValidationException::withMessages([
+                    strtolower(str_replace(' ', '_', $label)) => "{$label} terlalu besar.",
+                ]);
+            }
+            return;
+        }
+
+        if (!preg_match('#^data:(image/(?:jpeg|jpg|png|webp|gif));base64,([A-Za-z0-9+/=\r\n]+)$#i', $value, $m)) {
+            throw ValidationException::withMessages([
+                strtolower(str_replace(' ', '_', $label)) => "{$label} harus berupa gambar JPG, PNG, WebP, atau GIF.",
+            ]);
+        }
+
+        $bytes = base64_decode($m[2], true);
+        if ($bytes === false) {
+            throw ValidationException::withMessages([
+                strtolower(str_replace(' ', '_', $label)) => "{$label} tidak bisa dibaca. Coba pilih file lain.",
+            ]);
+        }
+
+        if (strlen($bytes) > $maxMb * 1024 * 1024) {
+            throw ValidationException::withMessages([
+                strtolower(str_replace(' ', '_', $label)) => "{$label} maksimal {$maxMb}MB.",
+            ]);
+        }
+
+        if (@getimagesizefromstring($bytes) === false) {
+            throw ValidationException::withMessages([
+                strtolower(str_replace(' ', '_', $label)) => "{$label} bukan file gambar yang valid.",
+            ]);
+        }
     }
 }

@@ -9,7 +9,7 @@
     { href:'/seller/orders',       label:'Pesanan Masuk', icon:'shopping-bag' },
     { href:'/seller/withdraw',     label:'Penarikan',     icon:'wallet' },
     { href:'/seller/profile',      label:'Profil Toko',   icon:'store' },
-    { href:'/chats',               label:'Chat Pembeli',  icon:'message-circle' }
+    { href:'/seller/chats',        label:'Chat Pembeli',  icon:'message-circle' }
   ];
 </script>
 

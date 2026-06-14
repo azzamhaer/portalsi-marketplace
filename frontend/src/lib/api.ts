@@ -40,7 +40,10 @@ export async function api<T = any>(
   try { data = text ? JSON.parse(text) : null; } catch { data = text; }
 
   if (!res.ok) {
-    const msg = (data && (data.message || data.error)) || `HTTP ${res.status}`;
+    const validation = data?.errors && typeof data.errors === 'object'
+      ? Object.values(data.errors).flat().filter(Boolean).join(' ')
+      : '';
+    const msg = validation || (data && (data.message || data.error)) || `HTTP ${res.status}`;
     throw new ApiError(res.status, data, msg);
   }
   return data as T;

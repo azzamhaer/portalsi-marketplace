@@ -77,10 +77,23 @@
     });
   }
 
+  function validateImageFile(file: File, maxMb: number): string | null {
+    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (!allowed.includes(file.type)) {
+      return 'Format foto harus JPG, PNG, WebP, atau GIF. Foto HEIC/RAW dari kamera perlu dikonversi dulu.';
+    }
+    if (file.size > maxMb * 1024 * 1024) {
+      return `Ukuran foto maksimal ${maxMb}MB.`;
+    }
+    return null;
+  }
+
   async function pickAvatar(e: Event) {
-    const file = (e.target as HTMLInputElement).files?.[0];
+    const input = e.target as HTMLInputElement;
+    const file = input.files?.[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) { toast.error('Maks 2MB'); return; }
+    const invalid = validateImageFile(file, 2);
+    if (invalid) { toast.error(invalid); input.value = ''; return; }
     uploadingAvatar = true;
     try {
       const dataUri = await fileToDataUri(file);
@@ -88,13 +101,15 @@
       const r: any = await apiEndpoints.sellerUpdateProfile({ avatar: dataUri });
       v = { ...v, ...r };
       toast.success('Foto profil diperbarui');
-    } catch (e: any) { toast.error(e.message); } finally { uploadingAvatar = false; }
+    } catch (e: any) { toast.error(e.message); } finally { uploadingAvatar = false; input.value = ''; }
   }
 
   async function pickBanner(e: Event) {
-    const file = (e.target as HTMLInputElement).files?.[0];
+    const input = e.target as HTMLInputElement;
+    const file = input.files?.[0];
     if (!file) return;
-    if (file.size > 3 * 1024 * 1024) { toast.error('Maks 3MB'); return; }
+    const invalid = validateImageFile(file, 3);
+    if (invalid) { toast.error(invalid); input.value = ''; return; }
     uploadingBanner = true;
     try {
       const dataUri = await fileToDataUri(file);
@@ -102,7 +117,7 @@
       const r: any = await apiEndpoints.sellerUpdateProfile({ banner: dataUri });
       v = { ...v, ...r };
       toast.success('Banner toko diperbarui');
-    } catch (e: any) { toast.error(e.message); } finally { uploadingBanner = false; }
+    } catch (e: any) { toast.error(e.message); } finally { uploadingBanner = false; input.value = ''; }
   }
 </script>
 
@@ -140,7 +155,7 @@
               <label class="absolute right-3 bottom-3 bg-white/95 backdrop-blur px-3 py-2 rounded-full text-xs font-medium shadow-soft cursor-pointer hover:bg-white inline-flex items-center gap-1.5">
                 <Icon name={uploadingBanner ? 'loader' : 'image'} size={14} />
                 {uploadingBanner ? 'Mengunggah…' : 'Ganti Banner'}
-                <input type="file" accept="image/*" on:change={pickBanner} class="hidden" />
+                <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" on:change={pickBanner} class="hidden" />
               </label>
             </div>
             <div class="flex items-center gap-4 p-4">
@@ -148,7 +163,7 @@
                 <img src={v.avatar} alt="" class="w-20 h-20 rounded-full object-cover -mt-12 border-4 border-white" />
                 <label class="absolute -bottom-1 -right-1 w-8 h-8 grid place-items-center bg-app-primary text-app-pfg rounded-full cursor-pointer hover:bg-ink-800 shadow-soft">
                   <Icon name={uploadingAvatar ? 'loader' : 'camera'} size={14} />
-                  <input type="file" accept="image/*" on:change={pickAvatar} class="hidden" />
+                  <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" on:change={pickAvatar} class="hidden" />
                 </label>
               </div>
               <div class="flex-1 min-w-0">
