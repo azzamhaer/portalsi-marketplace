@@ -41,7 +41,8 @@
 
   function statusNote(status: string) {
     if (status === 'PROCESSING') return 'Pembayaran sudah diterima. Pesanan siap dikirim.';
-    if (status === 'SHIPPED') return 'Pesanan sedang dikirim. Menunggu konfirmasi diterima dari pembeli.';
+    if (status === 'IN_TRANSIT') return 'Pesanan dalam perjalanan. Tandai telah sampai jika barang sudah diterima di tujuan.';
+    if (status === 'ARRIVED') return 'Pesanan telah sampai. Menunggu buyer konfirmasi diterima atau mengajukan komplain.';
     if (status === 'DONE') return 'Pesanan selesai. Dana pesanan ini sudah masuk saldo yang bisa ditarik.';
     if (status === 'PENDING_PAYMENT') return 'Menunggu pembayaran buyer. Jangan kirim barang dulu.';
     return ORDER_STATUS_LABEL[status] ?? status;
@@ -57,6 +58,22 @@
     try {
       const r: any = await apiEndpoints.sellerShipOrder(id);
       toast.success('Pesanan dikirim. Resi: ' + r.tracking_no);
+      load();
+    } catch (e: any) {
+      toast.error(e.message || 'Gagal mengubah status pesanan');
+    }
+  }
+
+  async function arrive(id: number) {
+    const ok = await confirmDialog.ask({
+      title: 'Pesanan telah sampai?',
+      message: 'Buyer baru bisa mengonfirmasi diterima setelah status ini diubah menjadi Telah Sampai.',
+      confirmText: 'Tandai sampai',
+    });
+    if (!ok) return;
+    try {
+      await apiEndpoints.sellerArriveOrder(id);
+      toast.success('Pesanan ditandai telah sampai');
       load();
     } catch (e: any) {
       toast.error(e.message || 'Gagal mengubah status pesanan');
@@ -103,9 +120,13 @@
                     <button on:click={() => ship(order.id)} class="btn-primary btn-sm">
                       <Icon name="truck" size={12} /> Kirim
                     </button>
-                  {:else if status === 'SHIPPED'}
-                    <span class="rounded-full bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700">
-                      Menunggu buyer
+                  {:else if status === 'IN_TRANSIT'}
+                    <button on:click={() => arrive(order.id)} class="btn-primary btn-sm">
+                      <Icon name="map-pin-check" size={12} /> Telah sampai
+                    </button>
+                  {:else if status === 'ARRIVED'}
+                    <span class="rounded-full bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700">
+                      Menunggu konfirmasi buyer
                     </span>
                   {:else if status === 'DONE'}
                     <a href="/seller/withdraw" class="btn-outline btn-sm">

@@ -9,8 +9,12 @@ export const ORDER_STATUS_LABEL: Record<string,string> = {
   PENDING_PAYMENT: 'Menunggu Pembayaran',
   PAID: 'Dibayar',
   PROCESSING: 'Diproses Penjual',
+  IN_TRANSIT: 'Dalam Perjalanan',
+  ARRIVED: 'Telah Sampai',
   SHIPPED: 'Sedang Dikirim',
   DONE: 'Selesai',
+  RETURN_REQUESTED: 'Komplain Diajukan',
+  REFUNDED: 'Direfund',
   CANCELLED: 'Dibatalkan',
   EXPIRED: 'Kadaluarsa'
 };
@@ -20,8 +24,12 @@ export function statusPill(status: string): string {
     PENDING_PAYMENT: 'pill-amber',
     PAID:            'pill-green',
     PROCESSING:      'pill-green',
+    IN_TRANSIT:      'pill-blue',
+    ARRIVED:         'pill-amber',
     SHIPPED:         'pill-blue',
     DONE:            'pill-ink',
+    RETURN_REQUESTED:'pill-amber',
+    REFUNDED:        'pill-blue',
     CANCELLED:       'pill-red',
     EXPIRED:         'pill-ink'
   } as any)[status] || 'pill-ink';

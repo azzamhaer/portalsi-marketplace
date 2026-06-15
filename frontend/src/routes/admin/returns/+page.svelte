@@ -15,7 +15,14 @@
   onMount(load);
 
   async function approve(id: number, status: string) {
-    const ok = await confirmDialog.ask({ title: 'Ubah status return?', message: `Status return akan diubah menjadi ${status}.`, confirmText: 'Ubah' });
+    const ok = await confirmDialog.ask({
+      title: status === 'REFUNDED' ? 'Refund ke saldo buyer?' : 'Tolak laporan?',
+      message: status === 'REFUNDED'
+        ? 'Dana pesanan akan masuk ke saldo profil buyer setelah disetujui.'
+        : 'Status pesanan akan kembali ke Telah Sampai dan buyer bisa konfirmasi diterima.',
+      confirmText: status === 'REFUNDED' ? 'Refund' : 'Tolak',
+      tone: status === 'REFUNDED' ? 'default' : 'danger',
+    });
     if (!ok) return;
     try { await apiEndpoints.adminApproveReturn(id, status); toast.success('Status diperbarui'); load(); }
     catch (e: any) { toast.error(e.message); }
@@ -42,9 +49,8 @@
         <p class="text-xs text-ink-500">Total order: {fmtRp(r.order?.total ?? 0)}</p>
         {#if r.status === 'PENDING'}
           <div class="flex gap-2 mt-3">
-            <button on:click={() => approve(r.id, 'APPROVED')} class="btn-primary btn-sm">Setujui</button>
+            <button on:click={() => approve(r.id, 'REFUNDED')} class="btn-primary btn-sm">Refund ke Saldo</button>
             <button on:click={() => approve(r.id, 'REJECTED')} class="btn-outline btn-sm">Tolak</button>
-            <button on:click={() => approve(r.id, 'REFUNDED')} class="btn-sm btn bg-blue-100 text-blue-800">Tandai Refunded</button>
           </div>
         {/if}
       </div>

@@ -4,6 +4,7 @@
   import AddressFields from '$lib/components/AddressFields.svelte';
   import { auth, cart, wishlist, toast, confirmDialog } from '$lib/stores.svelte';
   import { apiEndpoints, setToken } from '$lib/api';
+  import { fmtRp } from '$lib/utils';
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
 
@@ -14,6 +15,13 @@
   let editing = $state<any>(null);
   let addressFormOpen = $state(false);
   let formAddr = $state<any>({ recipient:'', phone:'', country:'Indonesia', province:'', city:'', district:'', village:'', full_address:'', postal_code:'', address_note:'', latitude:null, longitude:null, is_default:false });
+  let wallet = $state<any>(null);
+  let walletLoading = $state(false);
+  let wdAmount = $state('');
+  let wdBankName = $state('');
+  let wdBankAccount = $state('');
+  let wdBankHolder = $state('');
+  let wdSaving = $state(false);
 
   // Change password state
   let cpOld = $state(''), cpNew = $state(''), cpConfirm = $state(''), cpSaving = $state(false);
@@ -26,8 +34,32 @@
     name = auth.user.name; phone = auth.user.phone || '';
     if (!isAdmin) {
       try { addresses = await apiEndpoints.addresses(); } catch {}
+      await loadWallet();
     }
   });
+
+  async function loadWallet() {
+    walletLoading = true;
+    try { wallet = await apiEndpoints.userWallet(); }
+    catch {}
+    finally { walletLoading = false; }
+  }
+
+  async function requestUserWithdraw(e: Event) {
+    e.preventDefault();
+    wdSaving = true;
+    try {
+      await apiEndpoints.userRequestWithdraw({
+        amount: Number(wdAmount),
+        bank_name: wdBankName,
+        bank_account: wdBankAccount,
+        bank_holder: wdBankHolder,
+      });
+      wdAmount = wdBankName = wdBankAccount = wdBankHolder = '';
+      toast.success('Permintaan penarikan dikirim ke admin');
+      await loadWallet();
+    } catch (e: any) { toast.error(e.message); } finally { wdSaving = false; }
+  }
 
   async function save(e: Event) {
     e.preventDefault();
@@ -150,6 +182,44 @@
     <!-- User biasa (BUYER/SELLER) — tanpa sidebar karena sudah ada di header dropdown -->
     <div class="max-w-2xl mx-auto">
       <div class="space-y-5">
+        <div class="card">
+          <div class="flex items-start justify-between gap-4 mb-4">
+            <div>
+              <h3 class="font-semibold flex items-center gap-2"><Icon name="wallet" size={16} /> Saldo Profil</h3>
+              <p class="text-xs text-ink-500 mt-1">Refund pesanan yang disetujui admin akan masuk ke saldo ini.</p>
+            </div>
+            <div class="text-right">
+              <div class="text-xs text-ink-500">Tersedia</div>
+              <div class="text-xl font-bold">{walletLoading ? '...' : fmtRp(wallet?.available ?? 0)}</div>
+            </div>
+          </div>
+
+          <div class="grid sm:grid-cols-3 gap-2 mb-4">
+            <div class="rounded-2xl bg-ink-50 p-3">
+              <div class="text-xs text-ink-500">Total masuk</div>
+              <div class="font-semibold">{fmtRp(wallet?.gross ?? 0)}</div>
+            </div>
+            <div class="rounded-2xl bg-ink-50 p-3">
+              <div class="text-xs text-ink-500">Diproses/ditarik</div>
+              <div class="font-semibold">{fmtRp(wallet?.withdrawn ?? 0)}</div>
+            </div>
+            <div class="rounded-2xl bg-ink-50 p-3">
+              <div class="text-xs text-ink-500">Riwayat</div>
+              <div class="font-semibold">{wallet?.transactions?.length ?? 0} transaksi</div>
+            </div>
+          </div>
+
+          <form on:submit={requestUserWithdraw} class="space-y-3">
+            <div class="grid sm:grid-cols-2 gap-3">
+              <div><label class="label">Jumlah penarikan</label><input type="number" min="10000" bind:value={wdAmount} class="input" placeholder="Contoh: 50000" required /></div>
+              <div><label class="label">Nama bank/e-wallet</label><input bind:value={wdBankName} class="input" placeholder="BCA, Mandiri, DANA" required /></div>
+              <div><label class="label">Nomor rekening/akun</label><input bind:value={wdBankAccount} class="input" required /></div>
+              <div><label class="label">Nama pemilik</label><input bind:value={wdBankHolder} class="input" required /></div>
+            </div>
+            <button disabled={wdSaving || (wallet?.available ?? 0) <= 0} class="btn-primary btn-md">{wdSaving ? 'Mengirim...' : 'Ajukan Penarikan'}</button>
+          </form>
+        </div>
+
         <div class="card">
           <h3 class="font-semibold mb-4">Data Pribadi</h3>
           <form on:submit={save} class="space-y-4 max-w-lg">

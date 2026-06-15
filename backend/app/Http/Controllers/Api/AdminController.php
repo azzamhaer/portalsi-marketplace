@@ -26,7 +26,7 @@ class AdminController extends Controller
             'pending_vendors' => Vendor::where('verification_status', 'PENDING')->count(),
             'orders'     => Order::count(),
             'orders_today' => Order::where('created_at', '>=', now()->startOfDay())->count(),
-            'revenue'    => Order::whereIn('status', ['PROCESSING','SHIPPED','DONE'])->sum('total'),
+            'revenue'    => Order::whereIn('status', ['PROCESSING','IN_TRANSIT','ARRIVED','DONE'])->sum('total'),
             'pending_returns' => OrderReturn::where('status', 'PENDING')->count(),
         ]);
     }
@@ -49,6 +49,8 @@ class AdminController extends Controller
             'wishlists' => \App\Models\Wishlist::count(),
             'reviews' => \App\Models\Review::count(),
             'withdrawals' => \App\Models\Withdrawal::count(),
+            'user_withdrawals' => \App\Models\UserWithdrawal::count(),
+            'user_wallet_transactions' => \App\Models\UserWalletTransaction::count(),
             'vouchers' => \App\Models\SellerVoucher::count(),
             'kept' => [
                 'settings',
@@ -91,6 +93,8 @@ class AdminController extends Controller
                     'chat_threads',
                     'reports',
                     'user_notifications',
+                    'user_withdrawals',
+                    'user_wallet_transactions',
                     'withdrawals',
                     'vendor_followers',
                     'products',
@@ -282,7 +286,7 @@ class AdminController extends Controller
     {
         $o = Order::findOrFail($id);
         $data = $request->validate([
-            'status' => 'sometimes|in:PENDING_PAYMENT,PAID,PROCESSING,SHIPPED,DONE,CANCELLED,EXPIRED',
+            'status' => 'sometimes|in:PENDING_PAYMENT,PAID,PROCESSING,IN_TRANSIT,ARRIVED,DONE,RETURN_REQUESTED,REFUNDED,CANCELLED,EXPIRED',
             'tracking_no' => 'nullable|string',
         ]);
         $o->update($data);
@@ -311,9 +315,44 @@ class AdminController extends Controller
     public function approveReturn(Request $request, $id)
     {
         $data = $request->validate(['status' => 'required|in:APPROVED,REJECTED,REFUNDED', 'admin_note' => 'nullable|string']);
-        $r = OrderReturn::findOrFail($id);
-        $r->update($data);
-        return response()->json($r);
+        $r = OrderReturn::with('order', 'user')->findOrFail($id);
+
+        DB::transaction(function () use ($r, $data) {
+            if ($data['status'] === 'REJECTED') {
+                $r->update($data);
+                if ($r->order?->status === 'RETURN_REQUESTED') $r->order->update(['status' => 'ARRIVED']);
+                return;
+            }
+
+            $amount = (int) ($r->order?->total ?? 0);
+            \App\Models\UserWalletTransaction::firstOrCreate(
+                ['reference' => 'RETURN-' . $r->id],
+                [
+                    'user_id' => $r->user_id,
+                    'amount' => $amount,
+                    'type' => 'RETURN_REFUND',
+                    'note' => 'Refund pesanan #' . ($r->order?->order_number ?? $r->order_id),
+                ]
+            );
+
+            $r->update([
+                'status' => 'REFUNDED',
+                'admin_note' => $data['admin_note'] ?? null,
+            ]);
+            $r->order?->update(['status' => 'REFUNDED']);
+
+            \App\Models\UserNotification::send(
+                $r->user_id,
+                'RETURN_REFUNDED',
+                'Refund masuk saldo',
+                'Refund pesanan #' . ($r->order?->order_number ?? $r->order_id) . ' sebesar Rp ' . number_format($amount, 0, ',', '.') . ' sudah masuk saldo profil Anda.',
+                '/profile',
+                'SUCCESS',
+                ['order_id' => $r->order_id, 'return_id' => $r->id, 'amount' => $amount]
+            );
+        });
+
+        return response()->json($r->fresh(['order', 'user']));
     }
 
     /* ---------- Shipping options ---------- */

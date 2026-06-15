@@ -23,7 +23,7 @@
 
   async function process() {
     try {
-      await apiEndpoints.adminProcessWithdraw(selected.id, actionStatus, actionNote || undefined);
+      await apiEndpoints.adminProcessWithdraw(selected.display_id ?? selected.id, actionStatus, actionNote || undefined);
       toast.success('Status diperbarui');
       selected = null; actionNote = '';
       await load();
@@ -65,7 +65,7 @@
           <thead class="text-xs text-ink-500 border-b border-ink-100">
             <tr>
               <th class="text-left py-2 font-medium px-4 sm:px-0">Tanggal</th>
-              <th class="text-left py-2 font-medium">Toko</th>
+              <th class="text-left py-2 font-medium">Pemohon</th>
               <th class="text-left py-2 font-medium">Jumlah</th>
               <th class="text-left py-2 font-medium">Rekening Tujuan</th>
               <th class="text-left py-2 font-medium">Status</th>
@@ -76,7 +76,10 @@
             {#each list.data as w}
               <tr class="border-b border-ink-100 last:border-0">
                 <td class="py-2.5 text-xs px-4 sm:px-0">{new Date(w.created_at).toLocaleDateString('id-ID')}</td>
-                <td class="py-2.5 font-medium">{w.vendor?.name ?? '—'}</td>
+                <td class="py-2.5">
+                  <div class="font-medium">{w.withdrawer_type === 'USER' ? (w.user?.name ?? 'User') : (w.vendor?.name ?? 'Toko')}</div>
+                  <div class="text-[11px] text-ink-500">{w.withdrawer_type === 'USER' ? 'User biasa' : 'Seller'}</div>
+                </td>
                 <td class="py-2.5 font-semibold">{fmtRp(w.amount)}</td>
                 <td class="py-2.5 text-xs">
                   <div>{w.bank_name} • {w.bank_account}</div>
@@ -103,7 +106,8 @@
     <div class="bg-white rounded-3xl p-6 max-w-md w-full" on:click|stopPropagation role="document">
       <h3 class="font-semibold text-lg mb-4">Proses Penarikan</h3>
       <div class="bg-ink-50 p-3 rounded-xl mb-4 text-sm">
-        <div class="font-semibold">{selected.vendor?.name}</div>
+        <div class="font-semibold">{selected.withdrawer_type === 'USER' ? (selected.user?.name ?? 'User') : (selected.vendor?.name ?? 'Toko')}</div>
+        <div class="text-[11px] text-ink-500">{selected.withdrawer_type === 'USER' ? 'Penarikan saldo user' : 'Penarikan saldo seller'}</div>
         <div class="text-xs text-ink-500">{selected.bank_name} • {selected.bank_account} ({selected.bank_holder})</div>
         <div class="text-lg font-bold mt-2">{fmtRp(selected.amount)}</div>
       </div>

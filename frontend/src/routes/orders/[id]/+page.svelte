@@ -1,5 +1,6 @@
 <script lang="ts">
   import Icon from '$lib/components/Icon.svelte';
+  import ShippingRouteMap from '$lib/components/ShippingRouteMap.svelte';
   import { fmtRp, statusPill, ORDER_STATUS_LABEL } from '$lib/utils';
   import { toast, confirmDialog } from '$lib/stores.svelte';
   import { apiEndpoints } from '$lib/api';
@@ -52,10 +53,10 @@
   let showReturn = $state(false);
   async function requestReturn() {
     if (!returnReason.trim()) { toast.warn('Tulis alasan'); return; }
-    const ok = await confirmDialog.ask({ title: 'Ajukan pengembalian?', message: 'Permintaan return akan dikirim ke admin untuk ditinjau.', confirmText: 'Kirim return' });
+    const ok = await confirmDialog.ask({ title: 'Laporkan pesanan belum diterima?', message: 'Admin akan meninjau laporan ini. Jika disetujui, dana akan dikembalikan ke saldo profil Anda.', confirmText: 'Kirim laporan' });
     if (!ok) return;
     busy = true;
-    try { await apiEndpoints.requestReturn(order.id, returnReason); toast.success('Permintaan return dikirim'); showReturn = false; }
+    try { await apiEndpoints.requestReturn(order.id, returnReason); toast.success('Laporan dikirim ke admin'); showReturn = false; await invalidateAll(); }
     catch (e: any) { toast.error(e.message); } finally { busy = false; }
   }
 
@@ -128,6 +129,55 @@
         {/if}
 
         <button on:click={simulate} disabled={busy} class="btn-outline btn-md w-full">Simulasikan Pembayaran (mode dev)</button>
+      {/if}
+
+      {#if ['IN_TRANSIT', 'ARRIVED', 'DONE', 'RETURN_REQUESTED', 'REFUNDED'].includes(order.status)}
+        <div class="card space-y-4">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <h3 class="font-semibold mb-1 flex items-center gap-2"><Icon name="truck" size={16} /> Perjalanan Pesanan</h3>
+              <p class="text-sm text-ink-600">
+                {#if order.tracking_no}Resi: <b class="font-mono">{order.tracking_no}</b> · {/if}{order.courier_name} · {order.courier_eta}
+              </p>
+            </div>
+            <span class="pill {statusPill(order.status)}">{ORDER_STATUS_LABEL[order.status] ?? order.status}</span>
+          </div>
+
+          <ShippingRouteMap {order} />
+
+          {#if order.status === 'IN_TRANSIT'}
+            <div class="rounded-2xl bg-blue-50 border border-blue-100 p-3 text-sm text-blue-800">
+              Pesanan sedang dalam perjalanan. Tombol konfirmasi penerimaan akan aktif setelah seller menandai barang telah sampai.
+            </div>
+          {:else if order.status === 'ARRIVED'}
+            <div class="rounded-2xl bg-emerald-50 border border-emerald-100 p-3 text-sm text-emerald-800">
+              Seller menandai pesanan telah sampai. Silakan konfirmasi jika barang sudah diterima.
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <button on:click={markDone} disabled={busy} class="btn-primary btn-md">Pesanan Diterima</button>
+              <button on:click={() => showReturn = true} disabled={busy} class="btn-outline btn-md text-red-600 border-red-200 hover:bg-red-50">Belum diterima</button>
+            </div>
+          {:else if order.status === 'RETURN_REQUESTED'}
+            <div class="rounded-2xl bg-amber-50 border border-amber-100 p-3 text-sm text-amber-800">
+              Laporan belum diterima sedang ditinjau admin. Refund akan masuk ke saldo profil jika laporan disetujui.
+            </div>
+          {:else if order.status === 'REFUNDED'}
+            <div class="rounded-2xl bg-blue-50 border border-blue-100 p-3 text-sm text-blue-800">
+              Dana pesanan ini sudah dikembalikan ke saldo profil Anda.
+            </div>
+          {/if}
+        </div>
+      {/if}
+
+      {#if showReturn && order.status === 'ARRIVED'}
+        <div class="card border-red-100 bg-red-50/40">
+          <h3 class="font-semibold mb-3">Laporkan Pesanan Belum Diterima</h3>
+          <textarea bind:value={returnReason} class="input mb-3" rows={3} placeholder="Tuliskan kronologi singkat, misalnya tracking sudah sampai tetapi barang belum diterima"></textarea>
+          <div class="flex gap-2">
+            <button on:click={requestReturn} disabled={busy} class="btn-primary btn-md">Kirim ke Admin</button>
+            <button on:click={() => showReturn = false} class="btn-outline btn-md">Batal</button>
+          </div>
+        </div>
       {/if}
 
       {#if order.status === 'SHIPPED' && order.tracking_no}

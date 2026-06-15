@@ -18,4 +18,6 @@ class Withdrawal extends Model
     ];
 
     public function vendor(): BelongsTo { return $this->belongsTo(Vendor::class); }
+
+    public function getWithdrawerTypeAttribute(): string { return 'SELLER'; }
 }

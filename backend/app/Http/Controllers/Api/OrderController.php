@@ -44,7 +44,7 @@ class OrderController extends Controller
     public function activeCount(Request $request)
     {
         $count = Order::where('user_id', $request->user()->id)
-            ->whereIn('status', ['PENDING_PAYMENT', 'PAID', 'PROCESSING', 'SHIPPED'])
+            ->whereIn('status', ['PENDING_PAYMENT', 'PAID', 'PROCESSING', 'IN_TRANSIT', 'ARRIVED', 'RETURN_REQUESTED'])
             ->count();
 
         return response()->json(['count' => $count]);
@@ -55,6 +55,11 @@ class OrderController extends Controller
         $order = Order::with(['items', 'payment', 'address', 'user:id,name,email'])
             ->where('user_id', $request->user()->id)
             ->findOrFail($id);
+        $order->loadMissing([
+            'items.vendor:id,name,username,user_id,latitude,longitude,full_address,city,district,village,postal_code',
+            'items.vendor.user:id,name,email,phone',
+            'returns' => fn($q) => $q->latest(),
+        ]);
         return response()->json($order);
     }
 
@@ -439,8 +444,8 @@ class OrderController extends Controller
     public function markDone(Request $request, $id)
     {
         $order = Order::with('items')->where('user_id', $request->user()->id)->findOrFail($id);
-        if ($order->status !== 'SHIPPED') {
-            return response()->json(['message' => 'Pesanan hanya bisa diselesaikan setelah statusnya dikirim.'], 422);
+        if ($order->status !== 'ARRIVED') {
+            return response()->json(['message' => 'Pesanan hanya bisa dikonfirmasi diterima setelah seller menandai pesanan telah sampai.'], 422);
         }
         $order->update(['status' => 'DONE', 'done_at' => now()]);
         $this->notifySellersOrderDone($order->fresh('items'));
@@ -630,8 +635,11 @@ class OrderController extends Controller
     public function requestReturn(Request $request, $id)
     {
         $order = Order::where('user_id', $request->user()->id)->findOrFail($id);
-        if (!in_array($order->status, ['DONE', 'SHIPPED'])) {
-            return response()->json(['message' => 'Hanya pesanan selesai/dikirim yang bisa di-return'], 422);
+        if (!in_array($order->status, ['ARRIVED', 'DONE'])) {
+            return response()->json(['message' => 'Pengajuan hanya tersedia setelah seller menandai pesanan telah sampai.'], 422);
+        }
+        if (\App\Models\OrderReturn::where('order_id', $order->id)->whereIn('status', ['PENDING', 'APPROVED'])->exists()) {
+            return response()->json(['message' => 'Permintaan Anda sebelumnya masih menunggu proses admin.'], 422);
         }
         $data = $request->validate(['reason' => 'required|string|max:1000']);
         $r = \App\Models\OrderReturn::create([
@@ -639,6 +647,7 @@ class OrderController extends Controller
             'user_id' => $request->user()->id,
             'reason' => $data['reason'],
         ]);
+        if ($order->status === 'ARRIVED') $order->update(['status' => 'RETURN_REQUESTED']);
         return response()->json($r);
     }
 }

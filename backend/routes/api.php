@@ -106,6 +106,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/seller/products/{id}',  [SellerController::class, 'deleteProduct']);
     Route::get('/seller/orders',            [SellerController::class, 'orders']);
     Route::post('/seller/orders/{id}/ship', [SellerController::class, 'shipOrder']);
+    Route::post('/seller/orders/{id}/arrive', [SellerController::class, 'arriveOrder']);
     Route::get('/seller/vouchers',          [SellerController::class, 'vouchers']);
     Route::post('/seller/vouchers',         [SellerController::class, 'storeVoucher']);
     Route::put('/seller/vouchers/{id}',     [SellerController::class, 'updateVoucher']);
@@ -115,6 +116,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/seller/withdraw',          [WithdrawalController::class, 'balance']);
     Route::post('/seller/withdraw',         [WithdrawalController::class, 'request']);
     Route::delete('/seller/withdraw/{id}',  [WithdrawalController::class, 'cancel']);
+    Route::get('/wallet',                    [WithdrawalController::class, 'userBalance']);
+    Route::post('/wallet/withdraw',          [WithdrawalController::class, 'userRequest']);
 
     /* Follow */
     Route::post('/vendors/{id}/follow',     [FollowController::class, 'toggle']);

@@ -114,6 +114,7 @@ export const apiEndpoints = {
   sellerDeleteProduct: (id: number) => api(`/seller/products/${id}`, { method: 'DELETE' }),
   sellerOrders:     ()         => api('/seller/orders'),
   sellerShipOrder:  (id: number) => api(`/seller/orders/${id}/ship`, { method: 'POST' }),
+  sellerArriveOrder:(id: number) => api(`/seller/orders/${id}/arrive`, { method: 'POST' }),
   sellerVouchers:   ()         => api('/seller/vouchers'),
   sellerCreateVoucher: (b: any)=> api('/seller/vouchers', { method: 'POST', body: b }),
   sellerUpdateVoucher: (id: number, b: any) => api(`/seller/vouchers/${id}`, { method: 'PUT', body: b }),
@@ -155,6 +156,8 @@ export const apiEndpoints = {
   sellerWithdraw:        () => api('/seller/withdraw'),
   sellerRequestWithdraw: (amount: number) => api('/seller/withdraw', { method: 'POST', body: { amount } as any }),
   sellerCancelWithdraw:  (id: number) => api(`/seller/withdraw/${id}`, { method: 'DELETE' }),
+  userWallet:            () => api('/wallet'),
+  userRequestWithdraw:   (b: any) => api('/wallet/withdraw', { method: 'POST', body: b }),
 
   /* follow */
   toggleFollow: (vendorId: number) => api(`/vendors/${vendorId}/follow`, { method: 'POST' }),
@@ -175,7 +178,7 @@ export const apiEndpoints = {
     api(`/admin/vendors/${id}/moderation`, { method: 'POST', body: { moderation_mode: mode, admin_warning } as any }),
   adminDeleteVendor: (id: number) => api(`/admin/vendors/${id}`, { method: 'DELETE' }),
   adminWithdrawals:  (q='') => api('/admin/withdrawals' + (q ? '?'+q : '')),
-  adminProcessWithdraw: (id: number, status: string, admin_note?: string) => api(`/admin/withdrawals/${id}`, { method: 'POST', body: { status, admin_note } as any }),
+  adminProcessWithdraw: (id: number|string, status: string, admin_note?: string) => api(`/admin/withdrawals/${id}`, { method: 'POST', body: { status, admin_note } as any }),
   adminFaqs:           () => api('/admin/faqs'),
   adminSaveFaqs:       (items: any[]) => api('/admin/faqs', { method: 'PUT', body: { items } as any }),
   adminPaymentMethods: () => api('/admin/payment-methods'),

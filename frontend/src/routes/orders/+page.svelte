@@ -6,8 +6,10 @@
     { v:'',                  l:'Semua' },
     { v:'PENDING_PAYMENT',   l:'Belum Bayar' },
     { v:'PROCESSING',        l:'Diproses' },
-    { v:'SHIPPED',           l:'Dikirim' },
+    { v:'IN_TRANSIT',        l:'Dalam Perjalanan' },
+    { v:'ARRIVED',           l:'Telah Sampai' },
     { v:'DONE',              l:'Selesai' },
+    { v:'RETURN_REQUESTED',  l:'Diklaim' },
     { v:'CANCELLED',         l:'Dibatalkan' }
   ];
 </script>

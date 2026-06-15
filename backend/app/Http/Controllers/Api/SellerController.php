@@ -126,7 +126,7 @@ class SellerController extends Controller
             'stats' => [
                 'orders_24h'  => Order::whereHas('items', fn($q) => $q->where('vendor_id', $vendor->id))->where('created_at', '>=', now()->subDay())->count(),
                 'revenue_30d' => OrderItem::where('vendor_id', $vendor->id)
-                                  ->whereHas('order', fn($q) => $q->whereIn('status', ['PROCESSING','SHIPPED','DONE'])->where('created_at', '>=', now()->subDays(30)))
+                                  ->whereHas('order', fn($q) => $q->whereIn('status', ['PROCESSING','IN_TRANSIT','ARRIVED','DONE'])->where('created_at', '>=', now()->subDays(30)))
                                   ->sum(\DB::raw('price * quantity')),
                 'active_products' => Product::where('vendor_id', $vendor->id)->where('is_active', true)->count(),
                 'rating'          => $vendor->rating,
@@ -342,7 +342,7 @@ class SellerController extends Controller
             ->findOrFail($id);
 
         if ($order->status !== 'PROCESSING') {
-            return response()->json(['message' => 'Pesanan hanya bisa dikirim setelah pembayaran berhasil dan statusnya Diproses.'], 422);
+            return response()->json(['message' => 'Pesanan hanya bisa masuk pengiriman setelah pembayaran berhasil dan statusnya Diproses.'], 422);
         }
 
         $tracking = $order->tracking_no ?: $this->makeTrackingNumber($order->courier_name ?? 'JNE');
@@ -382,7 +382,7 @@ class SellerController extends Controller
         }
 
         $order->update([
-            'status' => 'SHIPPED',
+            'status' => 'IN_TRANSIT',
             'shipped_at' => now(),
             'tracking_no' => $tracking,
             'rajaongkir_order_no' => $rajaongkirOrderNo,
@@ -394,9 +394,9 @@ class SellerController extends Controller
             try {
                 \App\Models\UserNotification::send(
                     $order->user->id,
-                    'ORDER_SHIPPED',
-                    'Pesanan dikirim',
-                    "Pesanan #{$order->order_number} sudah dikirim dengan nomor resi {$tracking}.",
+                    'ORDER_IN_TRANSIT',
+                    'Pesanan dalam perjalanan',
+                    "Pesanan #{$order->order_number} sudah masuk perjalanan dengan nomor resi {$tracking}.",
                     '/orders/' . $order->id,
                     'INFO',
                     ['order_id' => $order->id, 'order_number' => $order->order_number, 'tracking_no' => $tracking]
@@ -407,6 +407,45 @@ class SellerController extends Controller
         }
 
         return response()->json(['ok' => true, 'tracking_no' => $tracking]);
+    }
+
+    public function arriveOrder(Request $request, $id)
+    {
+        $vendor = $this->requireApprovedVendor($request);
+        $order = Order::whereHas('items', fn($q) => $q->where('vendor_id', $vendor?->id))
+            ->with(['user'])
+            ->findOrFail($id);
+
+        if ($order->status !== 'IN_TRANSIT') {
+            return response()->json(['message' => 'Pesanan hanya bisa ditandai sampai jika sedang dalam perjalanan.'], 422);
+        }
+
+        $payload = $order->shipping_payload ?: [];
+        $payload['arrived_at'] = now()->toIso8601String();
+        $payload['arrived_by_vendor_id'] = $vendor->id;
+
+        $order->update([
+            'status' => 'ARRIVED',
+            'shipping_payload' => $payload,
+        ]);
+
+        if ($order->user) {
+            try {
+                \App\Models\UserNotification::send(
+                    $order->user->id,
+                    'ORDER_ARRIVED',
+                    'Pesanan telah sampai',
+                    "Seller menandai pesanan #{$order->order_number} telah sampai. Silakan konfirmasi diterima atau ajukan belum diterima jika barang belum Anda terima.",
+                    '/orders/' . $order->id,
+                    'INFO',
+                    ['order_id' => $order->id, 'order_number' => $order->order_number]
+                );
+            } catch (\Throwable $e) {
+                \Log::warning('Notifikasi ORDER_ARRIVED gagal: ' . $e->getMessage(), ['order_id' => $order->id]);
+            }
+        }
+
+        return response()->json(['ok' => true]);
     }
 
     private function buildRajaOngkirOrderPayload(Order $order, Vendor $vendor): array

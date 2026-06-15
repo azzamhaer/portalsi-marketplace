@@ -28,6 +28,8 @@ class User extends Authenticatable
     public function orders(): HasMany    { return $this->hasMany(Order::class); }
     public function wishlist(): HasMany  { return $this->hasMany(Wishlist::class); }
     public function reviews(): HasMany   { return $this->hasMany(Review::class); }
+    public function walletTransactions(): HasMany { return $this->hasMany(UserWalletTransaction::class); }
+    public function withdrawals(): HasMany { return $this->hasMany(UserWithdrawal::class); }
 
     public function isSeller(): bool { return $this->role === 'SELLER' || $this->vendor()->exists(); }
     public function isAdmin(): bool  { return $this->role === 'ADMIN'; }

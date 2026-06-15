@@ -5,7 +5,10 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\OrderItem;
 use App\Models\Setting;
+use App\Models\UserWalletTransaction;
+use App\Models\UserWithdrawal;
 use App\Models\Withdrawal;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -106,10 +109,34 @@ class WithdrawalController extends Controller
 
     public function adminList(Request $request)
     {
-        $q = Withdrawal::with('vendor:id,name,user_id,bank_name,bank_account,bank_holder')
-                       ->orderByDesc('id');
-        if ($s = $request->query('status')) $q->where('status', $s);
-        return response()->json($q->paginate(30));
+        $status = $request->query('status');
+        $seller = Withdrawal::with('vendor:id,name,user_id,bank_name,bank_account,bank_holder')
+            ->when($status, fn($q) => $q->where('status', $status))
+            ->get()
+            ->map(function ($w) {
+                $w->display_id = (string) $w->id;
+                $w->withdrawer_type = 'SELLER';
+                return $w;
+            });
+        $buyer = UserWithdrawal::with('user:id,name,email,phone')
+            ->when($status, fn($q) => $q->where('status', $status))
+            ->get()
+            ->map(function ($w) {
+                $w->display_id = 'user-' . $w->id;
+                $w->withdrawer_type = 'USER';
+                return $w;
+            });
+
+        $items = $seller->concat($buyer)->sortByDesc('created_at')->values();
+        $page = max(1, (int) $request->query('page', 1));
+        $perPage = 30;
+        return response()->json(new LengthAwarePaginator(
+            $items->forPage($page, $perPage)->values(),
+            $items->count(),
+            $perPage,
+            $page,
+            ['path' => $request->url(), 'query' => $request->query()]
+        ));
     }
 
     public function adminProcess(Request $request, $id)
@@ -118,6 +145,24 @@ class WithdrawalController extends Controller
             'status' => 'required|in:APPROVED,REJECTED,PAID',
             'admin_note' => 'nullable|string',
         ]);
+        if (str_starts_with((string) $id, 'user-')) {
+            $w = UserWithdrawal::with('user')->findOrFail((int) substr((string) $id, 5));
+            $w->update([
+                'status'       => $data['status'],
+                'admin_note'   => $data['admin_note'] ?? null,
+                'processed_at' => now(),
+            ]);
+            \App\Models\UserNotification::send(
+                $w->user_id,
+                'USER_WITHDRAW_' . $data['status'],
+                "Penarikan saldo Rp " . number_format($w->amount, 0, ',', '.') . " - {$data['status']}",
+                "Permintaan penarikan saldo Anda sebesar Rp " . number_format($w->amount, 0, ',', '.') . " telah diubah ke status {$data['status']}." . ($data['admin_note'] ? "\nCatatan: " . $data['admin_note'] : ''),
+                '/profile',
+                $data['status'] === 'PAID' ? 'SUCCESS' : ($data['status'] === 'REJECTED' ? 'DANGER' : 'INFO'),
+                ['user_withdrawal_id' => $w->id]
+            );
+            return response()->json($w);
+        }
         $w = Withdrawal::with('vendor.user')->findOrFail($id);
         $w->update([
             'status'       => $data['status'],
@@ -135,5 +180,46 @@ class WithdrawalController extends Controller
             );
         }
         return response()->json($w);
+    }
+
+    public function userBalance(Request $request)
+    {
+        $user = $request->user();
+        $gross = (int) UserWalletTransaction::where('user_id', $user->id)->sum('amount');
+        $withdrawn = (int) UserWithdrawal::where('user_id', $user->id)
+            ->whereIn('status', ['PENDING', 'APPROVED', 'PAID'])
+            ->sum('amount');
+
+        return response()->json([
+            'gross' => $gross,
+            'withdrawn' => $withdrawn,
+            'available' => max(0, $gross - $withdrawn),
+            'transactions' => UserWalletTransaction::where('user_id', $user->id)->orderByDesc('id')->take(30)->get(),
+            'history' => UserWithdrawal::where('user_id', $user->id)->orderByDesc('id')->take(30)->get(),
+        ]);
+    }
+
+    public function userRequest(Request $request)
+    {
+        $data = $request->validate([
+            'amount' => 'required|integer|min:10000',
+            'bank_name' => 'required|string|max:50',
+            'bank_account' => 'required|string|max:30',
+            'bank_holder' => 'required|string|max:255',
+        ]);
+
+        $balance = $this->userBalance($request)->getData(true);
+        if ($data['amount'] > (int) $balance['available']) {
+            return response()->json(['message' => 'Saldo tidak cukup. Tersedia: Rp ' . number_format((int) $balance['available'], 0, ',', '.')], 422);
+        }
+
+        return response()->json(UserWithdrawal::create([
+            'user_id' => $request->user()->id,
+            'amount' => $data['amount'],
+            'bank_name' => $data['bank_name'],
+            'bank_account' => $data['bank_account'],
+            'bank_holder' => $data['bank_holder'],
+            'status' => 'PENDING',
+        ]), 201);
     }
 }
