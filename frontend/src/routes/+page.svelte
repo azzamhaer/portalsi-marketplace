@@ -109,7 +109,7 @@
   <section class="border-t border-ink-100 pt-12 sm:pt-16">
     <div class="grid sm:grid-cols-3 gap-8 text-center">
       {#each [{ i:'shield', t:'Pembayaran terjamin', d:'Dana ditahan hingga barang Anda terima.' },
-              { i:'truck', t:'Pengiriman cepat', d:'6 kurir resmi, tracking real-time.' },
+              { i:'truck', t:'Pengiriman cepat', d:'kurir resmi, tracking real-time.' },
               { i:'headphones', t:'Dukungan 24/7', d:'Tim siap membantu kapan saja.' }] as item}
         <div>
           <div class="w-12 h-12 mx-auto mb-3 rounded-2xl bg-ink-100 grid place-items-center">

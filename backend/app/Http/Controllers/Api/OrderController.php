@@ -11,6 +11,7 @@ use App\Models\SellerVoucher;
 use App\Models\Setting;
 use App\Models\ShippingOption;
 use App\Services\RajaOngkirService;
+use App\Services\OrderPaymentService;
 use App\Services\TripayService;
 use Illuminate\Http\Request;
 use Illuminate\Database\QueryException;
@@ -23,7 +24,11 @@ use Throwable;
 
 class OrderController extends Controller
 {
-    public function __construct(private TripayService $tripay, private RajaOngkirService $rajaongkir) {}
+    public function __construct(
+        private TripayService $tripay,
+        private RajaOngkirService $rajaongkir,
+        private OrderPaymentService $orderPayments
+    ) {}
 
     public function index(Request $request)
     {
@@ -201,10 +206,6 @@ class OrderController extends Controller
 
             foreach ($itemsForDb as $row) {
                 $order->items()->create($row);
-            }
-            foreach ($data['items'] as $it) {
-                Product::where('id', $it['product_id'])->decrement('stock', $it['qty']);
-                Product::where('id', $it['product_id'])->increment('sold', $it['qty']);
             }
 
                 $trx = $this->tripay->createTransaction([
@@ -402,7 +403,14 @@ class OrderController extends Controller
         $order = Order::with('payment')->where('user_id', $request->user()->id)->findOrFail($id);
         $p = $order->payment;
         if (!$p) return response()->json(['message' => 'Belum ada payment'], 404);
-        if ($p->status === 'PAID') return response()->json(['changed' => false, 'status' => 'PAID', 'message' => 'Sudah dibayar']);
+        if ($p->status === 'PAID') {
+            if ($order->status === 'PENDING_PAYMENT') {
+                $this->orderPayments->markPaid($order);
+                $this->sendOrderEmail($order->fresh()->load('user'), $order->user, 'paid');
+                return response()->json(['changed' => true, 'status' => 'PAID', 'message' => 'Pembayaran sudah diterima']);
+            }
+            return response()->json(['changed' => false, 'status' => 'PAID', 'message' => 'Sudah dibayar']);
+        }
         if ($this->tripay->isMockMode()) return response()->json(['message' => 'Mock mode'], 422);
 
         $detail = $this->tripay->getTransactionDetail($p->reference);
@@ -411,8 +419,7 @@ class OrderController extends Controller
         $status = strtoupper($detail['data']['status'] ?? '');
         $changed = false;
         if ($status === 'PAID') {
-            $p->update(['status' => 'PAID', 'paid_at' => now(), 'raw_response' => json_encode($detail)]);
-            $order->update(['status' => 'PROCESSING', 'paid_at' => now()]);
+            $this->orderPayments->markPaid($order, $detail);
             $changed = true;
             $this->sendOrderEmail($order->fresh()->load('user'), $order->user, 'paid');
         } elseif (in_array($status, ['EXPIRED', 'FAILED', 'REFUND'])) {
@@ -428,10 +435,9 @@ class OrderController extends Controller
     {
         if (!$this->tripay->isMockMode()) return response()->json(['message' => 'Hanya tersedia di mock mode'], 422);
         $order = Order::with('payment')->where('user_id', $request->user()->id)->findOrFail($id);
-        $order->payment?->update(['status' => 'PAID', 'paid_at' => now()]);
-        $order->update(['status' => 'PROCESSING', 'paid_at' => now()]);
-        $this->sendOrderEmail($order->fresh(), $request->user(), 'paid');
-        return response()->json(['ok' => true]);
+        $changed = $this->orderPayments->markPaid($order);
+        if ($changed) $this->sendOrderEmail($order->fresh(), $request->user(), 'paid');
+        return response()->json(['ok' => true, 'changed' => $changed]);
     }
 
     public function markDone(Request $request, $id)

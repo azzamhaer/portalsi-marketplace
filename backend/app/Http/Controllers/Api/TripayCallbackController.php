@@ -4,12 +4,13 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Order;
+use App\Services\OrderPaymentService;
 use App\Services\TripayService;
 use Illuminate\Http\Request;
 
 class TripayCallbackController extends Controller
 {
-    public function __construct(private TripayService $tripay) {}
+    public function __construct(private TripayService $tripay, private OrderPaymentService $orderPayments) {}
 
     public function __invoke(Request $request)
     {
@@ -29,8 +30,7 @@ class TripayCallbackController extends Controller
 
         $status = strtoupper($data['status'] ?? '');
         if ($status === 'PAID') {
-            $order->payment?->update(['status' => 'PAID', 'paid_at' => now()]);
-            $order->update(['status' => 'PROCESSING', 'paid_at' => now()]);
+            $this->orderPayments->markPaid($order, $data);
         } elseif (in_array($status, ['EXPIRED', 'FAILED'])) {
             $order->payment?->update(['status' => $status]);
             $order->update(['status' => $status === 'EXPIRED' ? 'EXPIRED' : 'CANCELLED']);

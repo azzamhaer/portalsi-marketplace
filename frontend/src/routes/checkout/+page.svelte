@@ -153,7 +153,7 @@
     if (!courier) { toast.warn('Pilih ekspedisi pengiriman'); return; }
     const ok = await confirmDialog.ask({
       title: 'Buat pesanan?',
-      message: 'Pesanan akan dibuat dan stok produk akan dikurangi.',
+      message: 'Pesanan akan dibuat dengan status menunggu pembayaran. Stok baru dikurangi setelah pembayaran berhasil.',
       confirmText: 'Buat pesanan',
     });
     if (!ok) return;
@@ -197,7 +197,7 @@
         payment_method: pay,
       });
       cart.clearChecked();
-      toast.success('Pesanan dibuat');
+      toast.success('Pesanan dibuat, silakan lanjutkan pembayaran');
       goto('/orders/' + res.order_id);
     } catch (e: any) {
       checkoutError = e.message || 'Checkout gagal diproses';
