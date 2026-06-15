@@ -349,16 +349,24 @@ class SellerController extends Controller
         $rajaongkirOrderNo = $order->rajaongkir_order_no;
         $shippingPayload = $order->shipping_payload ?: [];
 
+        // Integrasi RajaOngkir SEPENUHNYA opsional.
+        // Hanya dipanggil saat admin mengaktifkan toggle DAN API key terisi.
+        // Kalau gagal apapun (network, response error, exception) — kita IGNORE dan
+        // lanjutkan manual update status. Tidak boleh bikin user dapat 500.
         try {
             $rajaongkir = app(RajaOngkirService::class);
             if (!$rajaongkirOrderNo && $rajaongkir->isConfigured() && $order->address) {
                 if (!$vendor->rajaongkir_destination_id) {
-                    $resolved = $rajaongkir->resolveDestinationId($vendor);
-                    if ($resolved) $vendor->forceFill(['rajaongkir_destination_id' => $resolved])->save();
+                    try {
+                        $resolved = $rajaongkir->resolveDestinationId($vendor);
+                        if ($resolved) $vendor->forceFill(['rajaongkir_destination_id' => $resolved])->save();
+                    } catch (\Throwable $e) { \Log::warning('RajaOngkir resolveDestinationId(vendor): ' . $e->getMessage()); }
                 }
                 if (!$order->address->rajaongkir_destination_id) {
-                    $resolved = $rajaongkir->resolveDestinationId($order->address);
-                    if ($resolved) $order->address->forceFill(['rajaongkir_destination_id' => $resolved])->save();
+                    try {
+                        $resolved = $rajaongkir->resolveDestinationId($order->address);
+                        if ($resolved) $order->address->forceFill(['rajaongkir_destination_id' => $resolved])->save();
+                    } catch (\Throwable $e) { \Log::warning('RajaOngkir resolveDestinationId(address): ' . $e->getMessage()); }
                 }
                 $create = $rajaongkir->createOrder($this->buildRajaOngkirOrderPayload($order, $vendor));
                 $raw = $create['raw'] ?? null;
@@ -370,6 +378,7 @@ class SellerController extends Controller
         } catch (\Throwable $e) {
             \Log::warning('RajaOngkir create order failed: ' . $e->getMessage(), ['order_id' => $order->id]);
             $shippingPayload['rajaongkir_error'] = $e->getMessage();
+            // JANGAN re-throw — biarkan pesanan tetap update manual.
         }
 
         $order->update([
@@ -380,17 +389,21 @@ class SellerController extends Controller
             'shipping_payload' => $shippingPayload,
         ]);
 
-        // Notifikasi ke pembeli dibuat best-effort agar update status tidak gagal karena email gateway.
+        // Notifikasi ke pembeli — best-effort, tidak boleh bikin endpoint gagal.
         if ($order->user) {
-            \App\Models\UserNotification::send(
-                $order->user->id,
-                'ORDER_SHIPPED',
-                'Pesanan dikirim',
-                "Pesanan #{$order->order_number} sudah dikirim dengan nomor resi {$tracking}.",
-                '/orders/' . $order->id,
-                'INFO',
-                ['order_id' => $order->id, 'order_number' => $order->order_number, 'tracking_no' => $tracking]
-            );
+            try {
+                \App\Models\UserNotification::send(
+                    $order->user->id,
+                    'ORDER_SHIPPED',
+                    'Pesanan dikirim',
+                    "Pesanan #{$order->order_number} sudah dikirim dengan nomor resi {$tracking}.",
+                    '/orders/' . $order->id,
+                    'INFO',
+                    ['order_id' => $order->id, 'order_number' => $order->order_number, 'tracking_no' => $tracking]
+                );
+            } catch (\Throwable $e) {
+                \Log::warning('Notifikasi ORDER_SHIPPED gagal: ' . $e->getMessage(), ['order_id' => $order->id]);
+            }
         }
 
         return response()->json(['ok' => true, 'tracking_no' => $tracking]);

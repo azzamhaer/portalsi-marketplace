@@ -52,7 +52,8 @@ class SettingsController extends Controller
             'tripay_api_key'=> Setting::get('tripay_api_key', ''),
             'tripay_private_key' => Setting::get('tripay_private_key', ''),
             'tripay_merchant_code' => Setting::get('tripay_merchant_code', ''),
-            'rajaongkir_enabled' => filter_var(Setting::get('rajaongkir_enabled', '1'), FILTER_VALIDATE_BOOLEAN),
+            // Default OFF — supaya install baru tidak otomatis hit RajaOngkir API saat seller ship order.
+            'rajaongkir_enabled' => filter_var(Setting::get('rajaongkir_enabled', '0'), FILTER_VALIDATE_BOOLEAN),
             'rajaongkir_mode' => Setting::get('rajaongkir_mode', config('services.rajaongkir.mode', 'sandbox')),
             'rajaongkir_api_key' => Setting::get('rajaongkir_api_key', ''),
             'rajaongkir_tariff_base_url' => Setting::get('rajaongkir_tariff_base_url', ''),

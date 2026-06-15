@@ -15,14 +15,33 @@ class RajaOngkirService
     public function __construct()
     {
         $this->http = new Client([
-            'timeout' => 15,
-            'http_errors' => false,
+            // Timeout dikecilkan agar request tidak menggantung lama saat upstream RajaOngkir lambat/mati.
+            'timeout'         => 6,
+            'connect_timeout' => 3,
+            'http_errors'     => false,
         ]);
     }
 
+    /**
+     * Cek apakah integrasi RajaOngkir BENAR-BENAR diaktifkan oleh admin.
+     * Wajib API key terisi DAN toggle enabled = true di Settings.
+     */
     public function isConfigured(): bool
     {
-        return trim((string) $this->apiKey()) !== '';
+        return $this->enabled() && trim((string) $this->apiKey()) !== '';
+    }
+
+    /**
+     * Toggle on/off integrasi RajaOngkir.
+     * Default OFF — kalau admin belum eksplisit menyalakan, integrasi diabaikan.
+     */
+    public function enabled(): bool
+    {
+        // Setting bisa boolean atau string '1'/'0'/'true'/'false'
+        $raw = Setting::get('rajaongkir_enabled', config('services.rajaongkir.enabled', false));
+        if (is_bool($raw)) return $raw;
+        $val = strtolower((string) $raw);
+        return in_array($val, ['1', 'true', 'on', 'yes', 'aktif'], true);
     }
 
     public function mode(): string
