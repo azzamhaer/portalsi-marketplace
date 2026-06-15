@@ -75,8 +75,12 @@
     return [a.full_address, a.village, a.district, a.city, a.province, a.postal_code].filter(Boolean).join(', ');
   }
 
+  function hasCoords(a: any) {
+    return a?.latitude != null && a?.longitude != null;
+  }
+
   async function loadShippingRates() {
-    if (!items.length || !ship.city || !ship.full_address) return;
+    if (!items.length || !ship.city || !ship.full_address || !hasCoords(ship)) return;
     shippingLoading = true;
     shippingError = '';
     try {
@@ -111,7 +115,7 @@
       items.map((i) => `${i.product_id}:${i.qty}`).join(','),
       ship.city, ship.district, ship.village, ship.postal_code, ship.latitude, ship.longitude
     ].join('|');
-    if (!auth.user || !items.length || !ship.city || !ship.full_address) return;
+    if (!auth.user || !items.length || !ship.city || !ship.full_address || !hasCoords(ship)) return;
     clearTimeout(rateTimer);
     rateTimer = setTimeout(loadShippingRates, 500);
     return () => clearTimeout(rateTimer);
@@ -147,6 +151,10 @@
   async function submit() {
     if (!ship.recipient || !ship.phone || !ship.province || !ship.city || !ship.district || !ship.village || !ship.full_address) {
       toast.warn('Pilih alamat pengiriman dari profil');
+      return;
+    }
+    if (!hasCoords(ship)) {
+      toast.warn('Alamat pengiriman belum punya pin lokasi. Lengkapi di halaman profil terlebih dahulu.');
       return;
     }
     if (!pay) { toast.warn('Pilih metode pembayaran'); return; }
@@ -236,6 +244,11 @@
                     </div>
                     <div class="mt-1 text-xs text-ink-500">{a.phone}</div>
                     <div class="mt-2 text-sm text-ink-700">{addressSubtitle(a)}</div>
+                    {#if !hasCoords(a)}
+                      <div class="mt-2 inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-1 text-[11px] font-medium text-red-700">
+                        <Icon name="map-pin-off" size={11} /> Pin lokasi belum lengkap
+                      </div>
+                    {/if}
                     {#if a.address_note}<div class="mt-1 text-xs text-ink-500">{a.address_note}</div>{/if}
                   </div>
                   <span class="grid h-6 w-6 shrink-0 place-items-center rounded-full border {String(a.id) === selectedAddressId ? 'border-ink-950 bg-ink-950 text-white' : 'border-ink-200 text-transparent'}">
@@ -246,9 +259,15 @@
             {/each}
           </div>
           {#if selectedAddress}
-            <div class="mt-4 rounded-xl bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
-              Ongkir dihitung ke alamat: <b>{selectedAddress.village || selectedAddress.city}</b>.
-            </div>
+            {#if hasCoords(selectedAddress)}
+              <div class="mt-4 rounded-xl bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+                Ongkir dihitung ke alamat: <b>{selectedAddress.village || selectedAddress.city}</b>.
+              </div>
+            {:else}
+              <div class="mt-4 rounded-xl bg-red-50 px-3 py-2 text-xs text-red-700">
+                Alamat ini belum punya pin lokasi. Edit alamat di profil sebelum checkout.
+              </div>
+            {/if}
           {/if}
           <a href="/profile#addresses" class="btn-outline btn-sm mt-4"><Icon name="map-pin-plus" size={14} /> Kelola alamat</a>
         {:else}
@@ -371,8 +390,8 @@
             <span>Total</span><span>{fmtRp(total)}</span>
           </div>
         </div>
-        <button on:click={submit} disabled={loading || !pay || !selectedAddressId} class="btn-primary btn-lg w-full mt-5">
-          <Icon name="lock" size={14} /> {loading ? 'Memproses...' : !selectedAddressId ? 'Pilih alamat pengiriman' : pay ? `Bayar ${fmtRp(total)}` : 'Pilih metode pembayaran'}
+        <button on:click={submit} disabled={loading || !pay || !selectedAddressId || !hasCoords(selectedAddress)} class="btn-primary btn-lg w-full mt-5">
+          <Icon name="lock" size={14} /> {loading ? 'Memproses...' : !selectedAddressId ? 'Pilih alamat pengiriman' : !hasCoords(selectedAddress) ? 'Lengkapi pin alamat' : pay ? `Bayar ${fmtRp(total)}` : 'Pilih metode pembayaran'}
         </button>
         {#if checkoutError}
           <div class="mt-4 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">

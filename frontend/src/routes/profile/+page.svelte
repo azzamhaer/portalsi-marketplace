@@ -110,6 +110,10 @@
 
   async function saveAddr(e: Event) {
     e.preventDefault();
+    if (formAddr.latitude == null || formAddr.longitude == null) {
+      toast.warn('Geser pin lokasi alamat terlebih dahulu.');
+      return;
+    }
     try {
       if (editing?.id) await apiEndpoints.updateAddress(editing.id, formAddr);
       else await apiEndpoints.saveAddress(formAddr);
@@ -250,7 +254,7 @@
           </form>
         </div>
 
-        <div class="card">
+        <div id="addresses" class="card">
           <div class="flex items-center justify-between mb-4">
             <h3 class="font-semibold">Alamat</h3>
             <button on:click={() => openAddrForm(null)} class="btn-outline btn-sm"><Icon name="plus" size={12} /> Tambah</button>
@@ -268,6 +272,10 @@
                 </div>
                 {#if a.latitude && a.longitude}
                   <a href={`https://www.google.com/maps?q=${a.latitude},${a.longitude}`} target="_blank" class="text-xs text-blue-600 mt-1 inline-flex items-center gap-1">Lihat di Maps <Icon name="external-link" size={10} /></a>
+                {:else}
+                  <div class="mt-1 inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-1 text-[11px] font-medium text-red-700">
+                    <Icon name="map-pin-off" size={11} /> Pin lokasi wajib dilengkapi
+                  </div>
                 {/if}
               </div>
               <button on:click={() => openAddrForm(a)} class="text-ink-700 hover:bg-ink-50 w-8 h-8 grid place-items-center rounded"><Icon name="pencil" size={14} /></button>

@@ -40,6 +40,7 @@
   }
 
   function statusNote(status: string) {
+    if (status === 'PAID') return 'Pembayaran sudah diterima. Klik Proses untuk menyiapkan pesanan.';
     if (status === 'PROCESSING') return 'Pembayaran sudah diterima. Pesanan siap dikirim.';
     if (status === 'IN_TRANSIT') return 'Pesanan dalam perjalanan. Tandai telah sampai jika barang sudah diterima di tujuan.';
     if (status === 'ARRIVED') return 'Pesanan telah sampai. Menunggu buyer konfirmasi diterima atau mengajukan komplain.';
@@ -61,6 +62,22 @@
       load();
     } catch (e: any) {
       toast.error(e.message || 'Gagal mengubah status pesanan');
+    }
+  }
+
+  async function processOrder(id: number) {
+    const ok = await confirmDialog.ask({
+      title: 'Proses pesanan?',
+      message: 'Status pesanan akan berubah menjadi Diproses. Setelah itu pesanan bisa dikirim.',
+      confirmText: 'Proses',
+    });
+    if (!ok) return;
+    try {
+      await apiEndpoints.sellerProcessOrder(id);
+      toast.success('Pesanan siap diproses');
+      load();
+    } catch (e: any) {
+      toast.error(e.message || 'Gagal memproses pesanan');
     }
   }
 
@@ -116,7 +133,11 @@
                 </div>
 
                 <div class="flex flex-wrap gap-2">
-                  {#if status === 'PROCESSING'}
+                  {#if status === 'PAID'}
+                    <button on:click={() => processOrder(order.id)} class="btn-primary btn-sm">
+                      <Icon name="package-check" size={12} /> Proses
+                    </button>
+                  {:else if status === 'PROCESSING'}
                     <button on:click={() => ship(order.id)} class="btn-primary btn-sm">
                       <Icon name="truck" size={12} /> Kirim
                     </button>

@@ -11,8 +11,8 @@
   let error = $state('');
   let timer: any;
 
-  const vendor = $derived(order.items?.find((it: any) => it.vendor?.latitude && it.vendor?.longitude)?.vendor);
-  const destination = $derived(order.address);
+  const vendor = $derived(order.items?.find((it: any) => it.vendor?.latitude != null && it.vendor?.longitude != null)?.vendor);
+  const destination = $derived(order.address || order.address_snapshot || order.shipping_payload?.address_snapshot);
   const hasCoords = $derived(vendor?.latitude && vendor?.longitude && destination?.latitude && destination?.longitude);
   const etaDays = $derived(parseEtaDays(order.courier_eta));
   const transitHubs = [

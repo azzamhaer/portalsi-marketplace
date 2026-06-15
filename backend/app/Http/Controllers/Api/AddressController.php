@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Address;
 use Illuminate\Http\Request;
+use Illuminate\Database\QueryException;
 
 class AddressController extends Controller
 {
@@ -31,8 +32,8 @@ class AddressController extends Controller
             'postal_code'  => 'required|string|max:10',
             'rajaongkir_destination_id' => 'nullable|integer',
             'address_note' => 'nullable|string|max:1000',
-            'latitude'     => 'nullable|numeric',
-            'longitude'    => 'nullable|numeric',
+            'latitude'     => 'required|numeric',
+            'longitude'    => 'required|numeric',
             'is_default'   => 'sometimes|boolean',
         ]);
         $data['country'] = $data['country'] ?? 'Indonesia';
@@ -62,8 +63,8 @@ class AddressController extends Controller
             'postal_code'  => 'sometimes|string|max:10',
             'rajaongkir_destination_id' => 'nullable|integer',
             'address_note' => 'nullable|string|max:1000',
-            'latitude'     => 'nullable|numeric',
-            'longitude'    => 'nullable|numeric',
+            'latitude'     => 'required|numeric',
+            'longitude'    => 'required|numeric',
             'is_default'   => 'sometimes|boolean',
         ]);
         if (array_key_exists('country', $data) && !$data['country']) $data['country'] = 'Indonesia';
@@ -77,7 +78,13 @@ class AddressController extends Controller
     public function destroy(Request $request, $id)
     {
         $addr = $request->user()->addresses()->findOrFail($id);
-        $addr->delete();
+        try {
+            $addr->delete();
+        } catch (QueryException $e) {
+            return response()->json([
+                'message' => 'Alamat belum bisa dihapus karena masih direferensikan pesanan lama. Jalankan migrasi terbaru agar pesanan memakai snapshot alamat.',
+            ], 409);
+        }
         return response()->json(['ok' => true]);
     }
 }

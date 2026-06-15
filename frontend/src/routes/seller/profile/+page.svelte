@@ -52,6 +52,10 @@
 
   async function save(e: Event) {
     e.preventDefault();
+    if (v.latitude == null || v.longitude == null) {
+      toast.warn('Geser pin lokasi toko terlebih dahulu.');
+      return;
+    }
     saving = true;
     try {
       const payload: any = {

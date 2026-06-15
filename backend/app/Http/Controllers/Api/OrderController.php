@@ -55,6 +55,7 @@ class OrderController extends Controller
         $order = Order::with(['items', 'payment', 'address', 'user:id,name,email'])
             ->where('user_id', $request->user()->id)
             ->findOrFail($id);
+        $this->applyAddressSnapshot($order);
         $order->loadMissing([
             'items.vendor:id,name,username,user_id,latitude,longitude,full_address,city,district,village,postal_code',
             'items.vendor.user:id,name,email,phone',
@@ -111,11 +112,15 @@ class OrderController extends Controller
             return DB::transaction(function () use ($data, $method, $userId, $request) {
             $productIds = collect($data['items'])->pluck('product_id');
             $products = Product::whereIn('id', $productIds)->where('is_active', true)
-                ->with('vendor:id,user_id,name,moderation_mode')->get()->keyBy('id');
+                ->with('vendor:id,user_id,name,moderation_mode,latitude,longitude')->get()->keyBy('id');
             // Block kalau ada produk dari toko yang sedang dimoderasi
             foreach ($products as $p) {
                 if ($p->vendor && in_array($p->vendor->moderation_mode, ['LIMITED', 'DISABLED'])) {
                     abort(422, "Toko {$p->vendor->name} sedang tidak menerima pesanan.");
+                }
+                if (!$p->vendor || $p->vendor->latitude === null || $p->vendor->longitude === null) {
+                    $vendorName = $p->vendor?->name ?? 'penjual';
+                    abort(422, "Toko {$vendorName} belum melengkapi pin lokasi. Hubungi seller atau pilih produk lain.");
                 }
             }
 
@@ -171,6 +176,9 @@ class OrderController extends Controller
 
             $address = Address::where('user_id', $userId)->whereKey($data['address_id'])->first();
             if (!$address) abort(422, 'Alamat pengiriman tidak ditemukan. Pilih alamat dari profil Anda.');
+            if ($address->latitude === null || $address->longitude === null) {
+                abort(422, 'Alamat pengiriman belum punya pin lokasi. Lengkapi koordinat alamat di halaman profil terlebih dahulu.');
+            }
 
             $orderNumber = 'PRT-' . strtoupper(base_convert(time(), 10, 36)) . '-' . strtoupper(substr(bin2hex(random_bytes(2)), 0, 4));
 
@@ -187,6 +195,9 @@ class OrderController extends Controller
                 'courier_eta'  => $data['courier_eta'],
                 'notes'        => $data['notes'] ?? null,
             ];
+            if (Schema::hasColumn('orders', 'address_snapshot')) {
+                $orderRow['address_snapshot'] = $this->addressSnapshot($address);
+            }
             foreach ([
                 'courier_code' => $data['courier_code'] ?? null,
                 'courier_service' => $data['courier_service'] ?? null,
@@ -371,6 +382,23 @@ class OrderController extends Controller
         } catch (\Throwable $e) {
             \Log::warning('Order email failed: ' . $e->getMessage(), ['order_id' => $order->id]);
         }
+    }
+
+    private function applyAddressSnapshot(Order $order): void
+    {
+        if ($order->address_snapshot) {
+            $order->setRelation('address', new Address($order->address_snapshot));
+        }
+    }
+
+    private function addressSnapshot(Address $address): array
+    {
+        return $address->only([
+            'id', 'recipient', 'phone', 'country', 'province', 'province_id',
+            'city', 'city_id', 'district', 'district_id', 'village', 'village_id',
+            'postal_code', 'rajaongkir_destination_id', 'latitude', 'longitude',
+            'full_address', 'address_note', 'is_default',
+        ]);
     }
 
     private function checkoutDbMessage(QueryException $e): string

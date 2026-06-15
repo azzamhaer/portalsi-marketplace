@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Address;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
@@ -44,8 +45,8 @@ class SellerController extends Controller
             'bank_account' => 'nullable|string|max:30',
             'bank_holder'  => 'nullable|string|max:255',
             'ktp_image'    => 'required|string', // base64 data URI
-            'latitude'     => 'nullable|numeric',
-            'longitude'    => 'nullable|numeric',
+            'latitude'     => 'required|numeric',
+            'longitude'    => 'required|numeric',
             'full_address' => 'required|string',
             'address_note' => 'nullable|string|max:1000',
         ]);
@@ -152,8 +153,8 @@ class SellerController extends Controller
             'postal_code'  => 'nullable|string|max:10',
             'rajaongkir_destination_id' => 'nullable|integer',
             'description'  => 'sometimes|string',
-            'latitude'     => 'nullable|numeric',
-            'longitude'    => 'nullable|numeric',
+            'latitude'     => 'required|numeric',
+            'longitude'    => 'required|numeric',
             'full_address' => 'nullable|string',
             'address_note' => 'nullable|string|max:1000',
             'avatar'       => 'nullable|string',
@@ -270,16 +271,20 @@ class SellerController extends Controller
     public function orders(Request $request)
     {
         $vendor = $this->requireApprovedVendor($request);
-        return response()->json(
-            OrderItem::where('vendor_id', $vendor->id)
-                ->with([
-                    'product:id,name,slug,image',
-                    'order.user:id,name,email,phone',
-                    'order.address',
-                    'order.payment:id,order_id,method_name,status,paid_at',
-                ])
-                ->orderByDesc('id')->paginate(30)
-        );
+        $page = OrderItem::where('vendor_id', $vendor->id)
+            ->with([
+                'product:id,name,slug,image',
+                'order.user:id,name,email,phone',
+                'order.address',
+                'order.payment:id,order_id,method_name,status,paid_at',
+            ])
+            ->orderByDesc('id')->paginate(30);
+
+        $page->getCollection()->each(function ($item) {
+            if ($item->order) $this->applyAddressSnapshot($item->order);
+        });
+
+        return response()->json($page);
     }
 
     public function vouchers(Request $request)
@@ -334,6 +339,23 @@ class SellerController extends Controller
         return response()->json(['ok' => true]);
     }
 
+    public function processOrder(Request $request, $id)
+    {
+        $vendor = $this->requireApprovedVendor($request);
+        $order = Order::whereHas('items', fn($q) => $q->where('vendor_id', $vendor?->id))
+            ->with(['user'])
+            ->findOrFail($id);
+
+        if (!in_array($order->status, ['PAID', 'PROCESSING'])) {
+            return response()->json(['message' => 'Pesanan hanya bisa diproses setelah pembayaran berhasil.'], 422);
+        }
+        if ($order->status === 'PAID') {
+            $order->update(['status' => 'PROCESSING']);
+        }
+
+        return response()->json(['ok' => true, 'status' => $order->fresh()->status]);
+    }
+
     public function shipOrder(Request $request, $id)
     {
         $vendor = $this->requireApprovedVendor($request);
@@ -343,6 +365,13 @@ class SellerController extends Controller
 
         if ($order->status !== 'PROCESSING') {
             return response()->json(['message' => 'Pesanan hanya bisa masuk pengiriman setelah pembayaran berhasil dan statusnya Diproses.'], 422);
+        }
+        $address = $this->orderAddress($order);
+        if (!$this->hasCoords($vendor)) {
+            return response()->json(['message' => 'Lengkapi pin lokasi toko di Profil Toko sebelum mengirim pesanan.'], 422);
+        }
+        if (!$address || !$this->hasCoords($address)) {
+            return response()->json(['message' => 'Alamat penerima belum punya koordinat. Minta buyer melengkapi pin alamat di profilnya sebelum pesanan dikirim.'], 422);
         }
 
         $tracking = $order->tracking_no ?: $this->makeTrackingNumber($order->courier_name ?? 'JNE');
@@ -355,16 +384,16 @@ class SellerController extends Controller
         // lanjutkan manual update status. Tidak boleh bikin user dapat 500.
         try {
             $rajaongkir = app(RajaOngkirService::class);
-            if (!$rajaongkirOrderNo && $rajaongkir->isConfigured() && $order->address) {
+            if (!$rajaongkirOrderNo && $rajaongkir->isConfigured() && $address) {
                 if (!$vendor->rajaongkir_destination_id) {
                     try {
                         $resolved = $rajaongkir->resolveDestinationId($vendor);
                         if ($resolved) $vendor->forceFill(['rajaongkir_destination_id' => $resolved])->save();
                     } catch (\Throwable $e) { \Log::warning('RajaOngkir resolveDestinationId(vendor): ' . $e->getMessage()); }
                 }
-                if (!$order->address->rajaongkir_destination_id) {
+                if (!$address->rajaongkir_destination_id && $order->address) {
                     try {
-                        $resolved = $rajaongkir->resolveDestinationId($order->address);
+                        $resolved = $rajaongkir->resolveDestinationId($address);
                         if ($resolved) $order->address->forceFill(['rajaongkir_destination_id' => $resolved])->save();
                     } catch (\Throwable $e) { \Log::warning('RajaOngkir resolveDestinationId(address): ' . $e->getMessage()); }
                 }
@@ -448,9 +477,28 @@ class SellerController extends Controller
         return response()->json(['ok' => true]);
     }
 
+    private function applyAddressSnapshot(Order $order): void
+    {
+        if (!$order->address_snapshot) return;
+        $order->setRelation('address', new Address($order->address_snapshot));
+    }
+
+    private function orderAddress(Order $order): ?Address
+    {
+        if ($order->address_snapshot) {
+            return new Address($order->address_snapshot);
+        }
+        return $order->address;
+    }
+
+    private function hasCoords($model): bool
+    {
+        return $model && $model->latitude !== null && $model->longitude !== null;
+    }
+
     private function buildRajaOngkirOrderPayload(Order $order, Vendor $vendor): array
     {
-        $address = $order->address;
+        $address = $this->orderAddress($order);
         $user = $order->user;
         $items = $order->items->map(function ($item) {
             return [
@@ -475,12 +523,12 @@ class SellerController extends Controller
             'shipper_address' => $vendor->full_address ?: trim("{$vendor->village}, {$vendor->district}, {$vendor->city}"),
             'origin_pin_point' => $vendor->latitude && $vendor->longitude ? "{$vendor->latitude}, {$vendor->longitude}" : null,
             'shipper_email' => $vendor->user?->email ?: config('mail.from.address', 'admin@example.com'),
-            'receiver_name' => $address->recipient,
-            'receiver_phone' => $address->phone,
-            'receiver_destination_id' => (int) ($address->rajaongkir_destination_id ?: 0),
-            'receiver_address' => $address->full_address,
+            'receiver_name' => $address?->recipient,
+            'receiver_phone' => $address?->phone,
+            'receiver_destination_id' => (int) ($address?->rajaongkir_destination_id ?: 0),
+            'receiver_address' => $address?->full_address,
             'receiver_email' => $user?->email,
-            'destination_pin_point' => $address->latitude && $address->longitude ? "{$address->latitude}, {$address->longitude}" : null,
+            'destination_pin_point' => $address?->latitude && $address?->longitude ? "{$address->latitude}, {$address->longitude}" : null,
             'shipping' => $order->courier_name,
             'shipping_type' => $order->courier_service ?: $order->shipping_type ?: 'REG',
             'payment_method' => 'BANK TRANSFER',

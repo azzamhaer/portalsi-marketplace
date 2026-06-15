@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 class Order extends Model
 {
     protected $fillable = [
-        'order_number', 'user_id', 'address_id',
+        'order_number', 'user_id', 'address_id', 'address_snapshot',
         'subtotal', 'shipping', 'insurance', 'payment_fee', 'total',
         'shipping_cashback', 'shipping_service_fee',
         'courier_name', 'courier_code', 'courier_service', 'courier_eta', 'shipping_type',
@@ -29,6 +29,7 @@ class Order extends Model
         'insurance'  => 'integer',
         'payment_fee'=> 'integer',
         'total'      => 'integer',
+        'address_snapshot' => 'array',
         'shipping_payload' => 'array',
     ];
 

@@ -38,6 +38,7 @@
   async function submit(e: Event) {
     e.preventDefault();
     if (!ktpData) { toast.warn('Upload foto KTP terlebih dahulu'); return; }
+    if (address.latitude == null || address.longitude == null) { toast.warn('Geser pin lokasi toko terlebih dahulu'); return; }
     saving = true;
     try {
       await apiEndpoints.sellerRegister({ name, ...address, description, bank_name, bank_account, bank_holder, ktp_image: ktpData });

@@ -53,9 +53,6 @@
         <span class="text-xs text-ink-400 line-through">{fmtRp(product.original_price)}</span>
       {/if}
     </div>
-    {#if isOutOfStock}
-      <p class="text-xs text-red-600">Masukkan ke wishlist untuk notifikasi restock.</p>
-    {/if}
     <div class="flex items-center justify-between text-xs text-ink-500">
       {#if (product.reviews_count ?? 0) > 0}
         <span class="flex items-center gap-1">
