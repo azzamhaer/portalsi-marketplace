@@ -23,6 +23,7 @@
         tripay_api_key: s.tripay_api_key,
         tripay_private_key: s.tripay_private_key,
         tripay_merchant_code: s.tripay_merchant_code,
+        rajaongkir_enabled: Boolean(s.rajaongkir_enabled),
         rajaongkir_mode: s.rajaongkir_mode,
         rajaongkir_api_key: s.rajaongkir_api_key,
         rajaongkir_tariff_base_url: s.rajaongkir_tariff_base_url,
@@ -147,6 +148,13 @@
     <div class="card">
       <h3 class="font-semibold mb-4">RajaOngkir / Komerce Shipping</h3>
       <p class="text-xs text-ink-500 mb-4">API ini dipakai untuk cari destinasi, hitung ongkir live saat checkout, dan mencoba membuat data order/AWB saat seller mengirim pesanan.</p>
+      <label class="mb-4 flex items-center justify-between gap-4 rounded-xl border border-ink-100 bg-ink-50 px-4 py-3 text-sm">
+        <span>
+          <b class="block text-ink-900">Aktifkan tarif otomatis RajaOngkir</b>
+          <span class="text-ink-500">Jika dimatikan atau API gagal, checkout memakai opsi pengiriman manual dari menu admin.</span>
+        </span>
+        <input type="checkbox" bind:checked={s.rajaongkir_enabled} class="h-5 w-5 shrink-0" />
+      </label>
       <div class="grid sm:grid-cols-2 gap-4">
         <div>
           <label class="label">Mode</label>

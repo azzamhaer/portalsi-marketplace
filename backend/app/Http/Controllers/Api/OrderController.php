@@ -8,12 +8,15 @@ use App\Models\Order;
 use App\Models\Payment;
 use App\Models\Product;
 use App\Models\SellerVoucher;
+use App\Models\Setting;
+use App\Models\ShippingOption;
 use App\Services\RajaOngkirService;
 use App\Services\TripayService;
 use Illuminate\Http\Request;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use RuntimeException;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Throwable;
@@ -149,30 +152,29 @@ class OrderController extends Controller
             if ($shipping  > 0) $itemsForTripay[] = ['sku'=>'SHIPPING', 'name'=>"Ongkir ({$data['courier_name']})", 'price'=>$shipping,  'quantity'=>1];
             if ($insurance > 0) $itemsForTripay[] = ['sku'=>'INSURANCE','name'=>'Asuransi Pengiriman',                'price'=>$insurance, 'quantity'=>1];
 
-            $address = Address::create([
+            $addressRow = [
                 'user_id'      => $userId,
                 'recipient'    => $data['recipient'],
                 'phone'        => $data['phone'],
                 'country'      => $data['country'] ?? 'Indonesia',
                 'province'     => $data['province'],
-                'province_id'  => $data['province_id'] ?? null,
                 'city'         => $data['city'],
-                'city_id'      => $data['city_id'] ?? null,
                 'district'     => $data['district'],
-                'district_id'  => $data['district_id'] ?? null,
                 'village'      => $data['village'],
-                'village_id'   => $data['village_id'] ?? null,
                 'postal_code'  => $data['postal_code'] ?? null,
-                'rajaongkir_destination_id' => $data['rajaongkir_destination_id'] ?? null,
                 'latitude'     => $data['latitude'] ?? null,
                 'longitude'    => $data['longitude'] ?? null,
                 'full_address' => $data['full_address'],
                 'address_note' => $data['address_note'] ?? null,
-            ]);
+            ];
+            foreach (['province_id', 'city_id', 'district_id', 'village_id', 'rajaongkir_destination_id'] as $column) {
+                if (Schema::hasColumn('addresses', $column)) $addressRow[$column] = $data[$column] ?? null;
+            }
+            $address = Address::create($addressRow);
 
             $orderNumber = 'PRT-' . strtoupper(base_convert(time(), 10, 36)) . '-' . strtoupper(substr(bin2hex(random_bytes(2)), 0, 4));
 
-            $order = Order::create([
+            $orderRow = [
                 'order_number' => $orderNumber,
                 'user_id'      => $userId,
                 'address_id'   => $address->id,
@@ -182,15 +184,20 @@ class OrderController extends Controller
                 'payment_fee'  => $fee,
                 'total'        => $grand,
                 'courier_name' => $data['courier_name'],
+                'courier_eta'  => $data['courier_eta'],
+                'notes'        => $data['notes'] ?? null,
+            ];
+            foreach ([
                 'courier_code' => $data['courier_code'] ?? null,
                 'courier_service' => $data['courier_service'] ?? null,
                 'shipping_type' => $data['shipping_type'] ?? null,
-                'courier_eta'  => $data['courier_eta'],
                 'shipping_cashback' => $data['shipping_cashback'] ?? 0,
                 'shipping_service_fee' => $data['shipping_service_fee'] ?? 0,
                 'shipping_payload' => $data['shipping_payload'] ?? null,
-                'notes'        => $data['notes'] ?? null,
-            ]);
+            ] as $column => $value) {
+                if (Schema::hasColumn('orders', $column)) $orderRow[$column] = $value;
+            }
+            $order = Order::create($orderRow);
 
             foreach ($itemsForDb as $row) {
                 $order->items()->create($row);
@@ -446,67 +453,137 @@ class OrderController extends Controller
             'destination.longitude' => 'nullable|numeric',
         ]);
 
-        $productIds = collect($data['items'])->pluck('product_id')->all();
-        $products = Product::whereIn('id', $productIds)
-            ->where('is_active', true)
-            ->with('vendor:id,name,city,province,district,village,postal_code,full_address,latitude,longitude,rajaongkir_destination_id')
-            ->get()
-            ->keyBy('id');
+        try {
+            $productIds = collect($data['items'])->pluck('product_id')->all();
+            $vendorColumns = array_values(array_filter([
+                'id', 'name', 'city', 'province', 'district', 'village', 'postal_code', 'full_address',
+                Schema::hasColumn('vendors', 'latitude') ? 'latitude' : null,
+                Schema::hasColumn('vendors', 'longitude') ? 'longitude' : null,
+                Schema::hasColumn('vendors', 'rajaongkir_destination_id') ? 'rajaongkir_destination_id' : null,
+            ]));
+            $products = Product::whereIn('id', $productIds)
+                ->where('is_active', true)
+                ->with('vendor:' . implode(',', $vendorColumns))
+                ->get()
+                ->keyBy('id');
 
-        $weight = 0;
-        $itemValue = 0;
-        $originVendor = null;
-        foreach ($data['items'] as $it) {
-            $p = $products->get($it['product_id']);
-            if (!$p) return response()->json(['message' => 'Produk tidak ditemukan'], 422);
-            $qty = (int) $it['qty'];
-            $weight += max(1, (int) $p->weight) * $qty;
-            $itemValue += (int) $p->price * $qty;
-            $originVendor ??= $p->vendor;
+            $weight = 0;
+            $itemValue = 0;
+            $originVendor = null;
+            foreach ($data['items'] as $it) {
+                $p = $products->get($it['product_id']);
+                if (!$p) return response()->json(['message' => 'Produk tidak ditemukan'], 422);
+                $qty = (int) $it['qty'];
+                $weight += max(1, (int) $p->weight) * $qty;
+                $itemValue += (int) $p->price * $qty;
+                $originVendor ??= $p->vendor;
+            }
+
+            if (!$this->isRajaOngkirEnabled() || !$this->rajaongkir->isConfigured()) {
+                return response()->json([
+                    'configured' => false,
+                    'source' => 'manual',
+                    'message' => 'RajaOngkir dimatikan atau belum dikonfigurasi. Menampilkan opsi pengiriman manual.',
+                    'weight_gram' => $weight,
+                    'item_value' => $itemValue,
+                    'options' => $this->manualShippingOptions($weight),
+                ]);
+            }
+
+            $originId = $this->rajaongkir->resolveDestinationId($originVendor);
+            $destinationId = $this->rajaongkir->resolveDestinationId($data['destination']);
+            if (!$originId || !$destinationId) {
+                return response()->json([
+                    'configured' => true,
+                    'source' => 'manual',
+                    'message' => 'Origin/destinasi RajaOngkir belum bisa dicocokkan. Menampilkan opsi pengiriman manual.',
+                    'weight_gram' => $weight,
+                    'item_value' => $itemValue,
+                    'options' => $this->manualShippingOptions($weight),
+                ]);
+            }
+
+            $result = $this->rajaongkir->calculate([
+                'shipper_destination_id' => $originId,
+                'receiver_destination_id' => $destinationId,
+                'weight_gram' => $weight,
+                'item_value' => $itemValue,
+                'origin_pin_point' => $originVendor?->latitude && $originVendor?->longitude ? "{$originVendor->latitude},{$originVendor->longitude}" : null,
+                'destination_pin_point' => !empty($data['destination']['latitude']) && !empty($data['destination']['longitude'])
+                    ? "{$data['destination']['latitude']},{$data['destination']['longitude']}"
+                    : null,
+                'cod' => 'no',
+            ]);
+
+            $options = $result['options'] ?: $this->manualShippingOptions($weight);
+            return response()->json([
+                'configured' => $result['configured'],
+                'source' => $result['options'] ? 'rajaongkir' : 'manual',
+                'origin_destination_id' => $originId,
+                'receiver_destination_id' => $destinationId,
+                'weight_gram' => $weight,
+                'item_value' => $itemValue,
+                'options' => $options,
+            ]);
+        } catch (HttpExceptionInterface $e) {
+            Log::warning('Shipping rates fell back to manual: ' . $e->getMessage());
+            return response()->json([
+                'configured' => $this->rajaongkir->isConfigured(),
+                'source' => 'manual',
+                'message' => $e->getMessage() ?: 'RajaOngkir gagal. Menampilkan opsi pengiriman manual.',
+                'options' => $this->manualShippingOptions(),
+            ]);
+        } catch (Throwable $e) {
+            Log::warning('Shipping rates failed, using manual fallback: ' . $e->getMessage(), ['exception' => $e]);
+            return response()->json([
+                'configured' => false,
+                'source' => 'manual',
+                'message' => 'Tarif otomatis belum bisa dimuat. Menampilkan opsi pengiriman manual.',
+                'options' => $this->manualShippingOptions(),
+            ]);
+        }
+    }
+
+    private function isRajaOngkirEnabled(): bool
+    {
+        return filter_var(Setting::get('rajaongkir_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
+    }
+
+    private function manualShippingOptions(int $weightGram = 1000): array
+    {
+        try {
+            $list = ShippingOption::where('is_active', true)->orderBy('sort_order')->get();
+            if ($list->isNotEmpty()) {
+                return $list->map(function ($row) {
+                    return [
+                        'courier_code' => strtolower(preg_replace('/[^a-z0-9]+/i', '-', $row->name)) ?: 'manual',
+                        'name' => $row->name,
+                        'courier_name' => $row->name,
+                        'service' => 'Manual',
+                        'type' => 'MANUAL',
+                        'eta' => $row->eta,
+                        'cost' => (int) $row->cost,
+                        'cashback' => 0,
+                        'service_fee' => 0,
+                        'raw' => null,
+                    ];
+                })->values()->all();
+            }
+        } catch (Throwable $e) {
+            Log::warning('Manual shipping options unavailable: ' . $e->getMessage());
         }
 
-        $originId = $this->rajaongkir->resolveDestinationId($originVendor);
-        $destinationId = $this->rajaongkir->resolveDestinationId($data['destination']);
-        if ($this->rajaongkir->isConfigured() && (!$originId || !$destinationId)) {
-            return response()->json(['message' => 'Origin/destinasi RajaOngkir belum bisa dicocokkan. Lengkapi kelurahan dan kode pos toko serta alamat pembeli.'], 422);
-        }
-
-        $result = $this->rajaongkir->calculate([
-            'shipper_destination_id' => $originId ?: 1,
-            'receiver_destination_id' => $destinationId ?: 1,
-            'weight_gram' => $weight,
-            'item_value' => $itemValue,
-            'origin_pin_point' => $originVendor?->latitude && $originVendor?->longitude ? "{$originVendor->latitude},{$originVendor->longitude}" : null,
-            'destination_pin_point' => !empty($data['destination']['latitude']) && !empty($data['destination']['longitude'])
-                ? "{$data['destination']['latitude']},{$data['destination']['longitude']}"
-                : null,
-            'cod' => 'no',
-        ]);
-
-        return response()->json([
-            'configured' => $result['configured'],
-            'origin_destination_id' => $originId,
-            'receiver_destination_id' => $destinationId,
-            'weight_gram' => $weight,
-            'item_value' => $itemValue,
-            'options' => $result['options'],
-        ]);
+        $kg = max(1, (int) ceil($weightGram / 1000));
+        return [
+            ['courier_code' => 'jne-manual', 'name'=>'JNE Reguler', 'courier_name'=>'JNE Reguler', 'service'=>'Manual', 'type'=>'MANUAL', 'eta'=>'2-4 hari', 'cost'=>12000 + (($kg - 1) * 4000), 'cashback'=>0, 'service_fee'=>0, 'raw'=>null],
+            ['courier_code' => 'jnt-manual', 'name'=>'J&T Express', 'courier_name'=>'J&T Express', 'service'=>'Manual', 'type'=>'MANUAL', 'eta'=>'2-3 hari', 'cost'=>14000 + (($kg - 1) * 4000), 'cashback'=>0, 'service_fee'=>0, 'raw'=>null],
+            ['courier_code' => 'sicepat-manual', 'name'=>'SiCepat REG', 'courier_name'=>'SiCepat REG', 'service'=>'Manual', 'type'=>'MANUAL', 'eta'=>'2-4 hari', 'cost'=>11000 + (($kg - 1) * 4000), 'cashback'=>0, 'service_fee'=>0, 'raw'=>null],
+        ];
     }
 
     public function shippingOptions()
     {
-        $list = \App\Models\ShippingOption::where('is_active', true)->orderBy('sort_order')->get();
-        if ($list->isEmpty()) {
-            return response()->json([
-                ['name'=>'JNE Reguler','eta'=>'2-4 hari','cost'=>12000],
-                ['name'=>'J&T Express','eta'=>'2-3 hari','cost'=>14000],
-                ['name'=>'SiCepat REG','eta'=>'2-4 hari','cost'=>11000],
-                ['name'=>'AnterAja','eta'=>'1-3 hari','cost'=>13000],
-                ['name'=>'GoSend Sameday','eta'=>'Hari Ini','cost'=>25000],
-                ['name'=>'Pos Indonesia','eta'=>'3-5 hari','cost'=>9000],
-            ]);
-        }
-        return response()->json($list);
+        return response()->json($this->manualShippingOptions());
     }
 
     public function requestReturn(Request $request, $id)

@@ -1,6 +1,5 @@
 <script lang="ts">
   import Icon from '$lib/components/Icon.svelte';
-  import AddressFields from '$lib/components/AddressFields.svelte';
   import { cart, auth, toast, confirmDialog } from '$lib/stores.svelte';
   import { apiEndpoints } from '$lib/api';
   import { fmtRp } from '$lib/utils';
@@ -44,6 +43,7 @@
   const method = $derived(pay ? data.methods.find((m: any) => m.code === pay) : null);
   const fee = $derived(method ? Math.round(method.fee_flat + (baseTotal * method.fee_pct / 100)) : 0);
   const total = $derived(baseTotal + fee);
+  const selectedAddress = $derived(addresses.find((a) => String(a.id) === selectedAddressId));
 
   const grouped = $derived.by(() => {
     const g: Record<string, any[]> = {};
@@ -59,19 +59,20 @@
       addresses = await apiEndpoints.addresses();
       const def = addresses.find((a) => a.is_default) || addresses[0];
       if (def) chooseAddress(String(def.id));
-      else await loadShippingRates();
-    } catch {}
+    } catch (e: any) {
+      toast.error(e.message || 'Gagal memuat alamat pengiriman');
+    }
   });
 
   function chooseAddress(id: string) {
     selectedAddressId = id;
-    if (!id) {
-      ship = { recipient: auth.user?.name || '', phone: auth.user?.phone || '', country:'Indonesia', province:'', city:'', district:'', village:'', postal_code:'', full_address:'', address_note:'', latitude: null, longitude: null };
-      return;
-    }
     const a = addresses.find((x) => String(x.id) === id);
     if (!a) return;
     ship = { country: 'Indonesia', ...a };
+  }
+
+  function addressSubtitle(a: any) {
+    return [a.full_address, a.village, a.district, a.city, a.province, a.postal_code].filter(Boolean).join(', ');
   }
 
   async function loadShippingRates() {
@@ -85,14 +86,24 @@
       });
       couriers = r.options?.length ? r.options : COURIERS;
       courier = couriers[0] ?? null;
-      if (!r.configured) shippingError = 'RajaOngkir belum dikonfigurasi. Menampilkan estimasi fallback.';
+      if (r.message) shippingError = r.message;
+      else if (r.source === 'manual' || !r.configured) shippingError = 'Menampilkan opsi pengiriman manual dari admin.';
     } catch (e: any) {
-      couriers = COURIERS;
-      courier = couriers[0];
-      shippingError = e.message || 'Gagal memuat tarif ekspedisi. Menampilkan estimasi fallback.';
+      await loadManualShippingOptions();
+      shippingError = e.message || 'Gagal memuat tarif ekspedisi otomatis. Menampilkan opsi pengiriman manual.';
     } finally {
       shippingLoading = false;
     }
+  }
+
+  async function loadManualShippingOptions() {
+    try {
+      const opts: any = await apiEndpoints.shippingOptions();
+      couriers = opts?.length ? opts : COURIERS;
+    } catch {
+      couriers = COURIERS;
+    }
+    courier = couriers[0] ?? null;
   }
 
   $effect(() => {
@@ -135,7 +146,7 @@
 
   async function submit() {
     if (!ship.recipient || !ship.phone || !ship.province || !ship.city || !ship.district || !ship.village || !ship.full_address) {
-      toast.warn('Lengkapi alamat pengiriman');
+      toast.warn('Pilih alamat pengiriman dari profil');
       return;
     }
     if (!pay) { toast.warn('Pilih metode pembayaran'); return; }
@@ -206,17 +217,51 @@
       <div class="card">
         <h3 class="font-semibold mb-4 flex items-center gap-2"><Icon name="truck" size={16} class="text-ink-500" /> Alamat Pengiriman</h3>
         {#if addresses.length}
-          <div class="mb-4">
-            <label class="label">Pilih alamat tersimpan</label>
-            <select class="input" bind:value={selectedAddressId} on:change={(e) => chooseAddress((e.currentTarget as HTMLSelectElement).value)}>
-              <option value="">Isi alamat baru</option>
-              {#each addresses as a}
-                <option value={a.id}>{a.recipient} - {a.full_address}, {a.city}</option>
-              {/each}
-            </select>
+          <div class="grid gap-3">
+            {#each addresses as a (a.id)}
+              <button
+                type="button"
+                on:click={() => chooseAddress(String(a.id))}
+                class="text-left rounded-2xl border p-4 transition hover:bg-ink-50"
+                class:border-ink-950={String(a.id) === selectedAddressId}
+                class:bg-ink-50={String(a.id) === selectedAddressId}
+                class:border-ink-200={String(a.id) !== selectedAddressId}
+              >
+                <div class="flex items-start justify-between gap-3">
+                  <div class="min-w-0">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <b class="text-sm">{a.recipient}</b>
+                      {#if a.is_default}<span class="pill-green">Utama</span>{/if}
+                    </div>
+                    <div class="mt-1 text-xs text-ink-500">{a.phone}</div>
+                    <div class="mt-2 text-sm text-ink-700">{addressSubtitle(a)}</div>
+                    {#if a.address_note}<div class="mt-1 text-xs text-ink-500">{a.address_note}</div>{/if}
+                  </div>
+                  <span class="grid h-6 w-6 shrink-0 place-items-center rounded-full border {String(a.id) === selectedAddressId ? 'border-ink-950 bg-ink-950 text-white' : 'border-ink-200 text-transparent'}">
+                    <Icon name="check" size={14} />
+                  </span>
+                </div>
+              </button>
+            {/each}
+          </div>
+          {#if selectedAddress}
+            <div class="mt-4 rounded-xl bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+              Ongkir dihitung ke alamat: <b>{selectedAddress.village || selectedAddress.city}</b>.
+            </div>
+          {/if}
+          <a href="/profile#addresses" class="btn-outline btn-sm mt-4"><Icon name="map-pin-plus" size={14} /> Kelola alamat</a>
+        {:else}
+          <div class="rounded-2xl border border-amber-100 bg-amber-50 p-5">
+            <div class="flex items-start gap-3">
+              <Icon name="map-pin" size={18} class="mt-0.5 text-amber-700" />
+              <div>
+                <h4 class="font-semibold text-amber-900">Belum ada alamat pengiriman</h4>
+                <p class="mt-1 text-sm text-amber-800">Tambahkan alamat di profil dulu agar ongkir dan checkout bisa diproses dengan benar.</p>
+                <a href="/profile#addresses" class="btn-primary btn-sm mt-4"><Icon name="plus" size={14} /> Tambah alamat di profil</a>
+              </div>
+            </div>
           </div>
         {/if}
-        <AddressFields bind:value={ship} />
         <div class="mt-4"><label class="label">Catatan pesanan (opsional)</label><textarea class="input" rows={2} bind:value={notes}></textarea></div>
       </div>
 
@@ -325,8 +370,8 @@
             <span>Total</span><span>{fmtRp(total)}</span>
           </div>
         </div>
-        <button on:click={submit} disabled={loading || !pay} class="btn-primary btn-lg w-full mt-5">
-          <Icon name="lock" size={14} /> {loading ? 'Memproses...' : pay ? `Bayar ${fmtRp(total)}` : 'Pilih metode pembayaran'}
+        <button on:click={submit} disabled={loading || !pay || !selectedAddressId} class="btn-primary btn-lg w-full mt-5">
+          <Icon name="lock" size={14} /> {loading ? 'Memproses...' : !selectedAddressId ? 'Pilih alamat pengiriman' : pay ? `Bayar ${fmtRp(total)}` : 'Pilih metode pembayaran'}
         </button>
         {#if checkoutError}
           <div class="mt-4 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">

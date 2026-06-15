@@ -6,6 +6,7 @@ use App\Models\Setting;
 use GuzzleHttp\Client;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Log;
+use RuntimeException;
 
 class RajaOngkirService
 {
@@ -129,15 +130,20 @@ class RajaOngkirService
             'x-api-key' => (string) $this->apiKey(),
         ], $options['headers'] ?? []);
 
-        $res = $this->http->request($method, $url, $options);
+        try {
+            $res = $this->http->request($method, $url, $options);
+        } catch (\Throwable $e) {
+            Log::warning('RajaOngkir connection failed', ['url' => $url, 'message' => $e->getMessage()]);
+            throw new RuntimeException('RajaOngkir tidak bisa dihubungi. Periksa API key, mode, dan whitelist IP server.');
+        }
         $body = (string) $res->getBody();
         $json = json_decode($body, true);
         if ($res->getStatusCode() >= 400 || !is_array($json)) {
             Log::warning('RajaOngkir API failed', ['status' => $res->getStatusCode(), 'body' => $body]);
-            abort(502, 'RajaOngkir tidak merespons dengan benar');
+            throw new RuntimeException('RajaOngkir tidak merespons dengan benar. Periksa API key, mode, dan whitelist IP server.');
         }
         if (($json['meta']['status'] ?? null) === false || ($json['meta']['status'] ?? null) === 'error') {
-            abort(422, $json['meta']['message'] ?? 'Request RajaOngkir gagal');
+            throw new RuntimeException($json['meta']['message'] ?? 'Request RajaOngkir gagal');
         }
         return $json;
     }
