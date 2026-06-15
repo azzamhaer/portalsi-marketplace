@@ -24,6 +24,7 @@ class Product extends Model
         'rating'        => 'float',
         'price'         => 'integer',
         'original_price'=> 'integer',
+        'weight'        => 'integer',
         'images'        => 'array',
         'variants'      => 'array',
     ];

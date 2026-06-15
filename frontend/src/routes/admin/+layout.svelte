@@ -3,7 +3,7 @@
   import { auth } from '$lib/stores.svelte';
   import { apiEndpoints } from '$lib/api';
   import { goto } from '$app/navigation';
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { page } from '$app/stores';
 
   let { children } = $props();
@@ -11,15 +11,27 @@
   const access = $derived(!!auth.user && auth.user.role === 'ADMIN');
   let mounted = $state(false);
   let pendingVendors = $state(0);
+  let pollTimer: any;
+
+  async function refreshPending() {
+    try {
+      const stats: any = await apiEndpoints.adminStats();
+      pendingVendors = stats.pending_vendors ?? 0;
+    } catch {}
+  }
 
   onMount(async () => {
     mounted = true;
     if (!auth.user) { goto('/login?next=' + ($page.url.pathname || '/admin')); return; }
     if (auth.user.role !== 'ADMIN') goto('/');
-    try {
-      const stats: any = await apiEndpoints.adminStats();
-      pendingVendors = stats.pending_vendors ?? 0;
-    } catch {}
+    await refreshPending();
+    pollTimer = setInterval(refreshPending, 10000);
+    window.addEventListener('admin:pending-vendors-changed', refreshPending);
+  });
+
+  onDestroy(() => {
+    clearInterval(pollTimer);
+    if (typeof window !== 'undefined') window.removeEventListener('admin:pending-vendors-changed', refreshPending);
   });
 </script>
 

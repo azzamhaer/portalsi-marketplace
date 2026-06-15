@@ -45,7 +45,13 @@
       tone: st === 'APPROVED' ? 'default' : 'danger'
     });
     if (!ok) return;
-    try { await apiEndpoints.adminVerifyVendor(v.id, st, note ?? ''); toast.success('Status diperbarui'); active = null; load(); }
+    try {
+      await apiEndpoints.adminVerifyVendor(v.id, st, note ?? '');
+      toast.success('Status diperbarui');
+      active = null;
+      window.dispatchEvent(new CustomEvent('admin:pending-vendors-changed'));
+      load();
+    }
     catch (e: any) { toast.error(e.message); }
   }
   async function del(v: any) {

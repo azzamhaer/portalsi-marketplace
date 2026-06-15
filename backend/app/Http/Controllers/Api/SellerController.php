@@ -9,6 +9,7 @@ use App\Models\Product;
 use App\Models\SellerVoucher;
 use App\Models\Tag;
 use App\Models\Vendor;
+use App\Services\RajaOngkirService;
 use App\Support\ReservedUsernames;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -26,10 +27,15 @@ class SellerController extends Controller
             'name'         => 'required|string|max:255',
             'country'      => 'nullable|string|max:80',
             'province'     => 'required|string|max:255',
+            'province_id'  => 'nullable|string|max:20',
             'city'         => 'required|string|max:255',
+            'city_id'      => 'nullable|string|max:20',
             'district'     => 'required|string|max:255',
+            'district_id'  => 'nullable|string|max:20',
             'village'      => 'required|string|max:255',
+            'village_id'   => 'nullable|string|max:20',
             'postal_code'  => 'required|string|max:10',
+            'rajaongkir_destination_id' => 'nullable|integer',
             'description'  => 'required|string',
             'bank_name'    => 'nullable|string|max:50',
             'bank_account' => 'nullable|string|max:30',
@@ -53,10 +59,15 @@ class SellerController extends Controller
             'username'    => $username,
             'country'     => $data['country'] ?? 'Indonesia',
             'province'    => $data['province'],
+            'province_id' => $data['province_id'] ?? null,
             'city'        => $data['city'],
+            'city_id'     => $data['city_id'] ?? null,
             'district'    => $data['district'],
+            'district_id' => $data['district_id'] ?? null,
             'village'     => $data['village'],
+            'village_id'  => $data['village_id'] ?? null,
             'postal_code' => $data['postal_code'] ?? null,
+            'rajaongkir_destination_id' => $data['rajaongkir_destination_id'] ?? null,
             'latitude'    => $data['latitude'] ?? null,
             'longitude'   => $data['longitude'] ?? null,
             'full_address'=> $data['full_address'] ?? null,
@@ -128,10 +139,15 @@ class SellerController extends Controller
             'name'         => 'sometimes|string|max:255',
             'country'      => 'nullable|string|max:80',
             'province'     => 'sometimes|string|max:255',
+            'province_id'  => 'nullable|string|max:20',
             'city'         => 'sometimes|string|max:255',
+            'city_id'      => 'nullable|string|max:20',
             'district'     => 'sometimes|string|max:255',
+            'district_id'  => 'nullable|string|max:20',
             'village'      => 'sometimes|string|max:255',
+            'village_id'   => 'nullable|string|max:20',
             'postal_code'  => 'nullable|string|max:10',
+            'rajaongkir_destination_id' => 'nullable|integer',
             'description'  => 'sometimes|string',
             'latitude'     => 'nullable|numeric',
             'longitude'    => 'nullable|numeric',
@@ -170,12 +186,11 @@ class SellerController extends Controller
             'price'          => 'required|integer|min:1',
             'original_price' => 'nullable|integer|min:0',
             'stock'          => 'required|integer|min:0',
+            'weight'         => 'required|integer|min:1|max:1000000',
             'image'          => 'nullable|string',
             'images'         => 'nullable|array|max:8',
             'images.*'       => 'string',
             'variants'       => 'nullable|array',
-            'variants.*'     => 'array',
-            'variants.*.*'   => 'string|max:50',
             'is_active'      => 'sometimes|boolean',
             'tags'           => 'required|array|min:1',
             'tags.*'         => 'string|max:50',
@@ -193,9 +208,10 @@ class SellerController extends Controller
             'price'      => $data['price'],
             'original_price' => $data['original_price'] ?? null,
             'stock'      => $data['stock'],
+            'weight'     => $data['weight'],
             'image'      => $coverImage,
             'images'     => $images,
-            'variants'   => $data['variants'] ?? null,
+            'variants'   => $this->normalizeVariants($data['variants'] ?? null),
             'is_active'  => $data['is_active'] ?? true,
         ]);
 
@@ -213,18 +229,20 @@ class SellerController extends Controller
             'price'          => 'sometimes|integer|min:1',
             'original_price' => 'nullable|integer|min:0',
             'stock'          => 'sometimes|integer|min:0',
+            'weight'         => 'sometimes|integer|min:1|max:1000000',
             'image'          => 'nullable|string',
             'images'         => 'nullable|array|max:8',
             'images.*'       => 'string',
             'variants'       => 'nullable|array',
-            'variants.*'     => 'array',
-            'variants.*.*'   => 'string|max:50',
             'is_active'      => 'sometimes|boolean',
             'tags'           => 'sometimes|array',
             'tags.*'         => 'string|max:50',
         ]);
         $tags = $data['tags'] ?? null;
         unset($data['tags']);
+        if (array_key_exists('variants', $data)) {
+            $data['variants'] = $this->normalizeVariants($data['variants']);
+        }
         $product->update($data);
         if ($tags !== null) $this->syncTags($product, $tags);
         return response()->json($product->load('tagModels'));
@@ -307,9 +325,44 @@ class SellerController extends Controller
     public function shipOrder(Request $request, $id)
     {
         $vendor = $this->requireApprovedVendor($request);
-        $order = Order::whereHas('items', fn($q) => $q->where('vendor_id', $vendor?->id))->with('user')->findOrFail($id);
-        $tracking = $this->makeTrackingNumber($order->courier_name ?? 'JNE');
-        $order->update(['status' => 'SHIPPED', 'shipped_at' => now(), 'tracking_no' => $tracking]);
+        $order = Order::whereHas('items', fn($q) => $q->where('vendor_id', $vendor?->id))
+            ->with(['user', 'address', 'items' => fn($q) => $q->where('vendor_id', $vendor->id)->with('product:id,weight')])
+            ->findOrFail($id);
+
+        $tracking = $order->tracking_no ?: $this->makeTrackingNumber($order->courier_name ?? 'JNE');
+        $rajaongkirOrderNo = $order->rajaongkir_order_no;
+        $shippingPayload = $order->shipping_payload ?: [];
+
+        try {
+            $rajaongkir = app(RajaOngkirService::class);
+            if (!$rajaongkirOrderNo && $rajaongkir->isConfigured() && $order->address) {
+                if (!$vendor->rajaongkir_destination_id) {
+                    $resolved = $rajaongkir->resolveDestinationId($vendor);
+                    if ($resolved) $vendor->forceFill(['rajaongkir_destination_id' => $resolved])->save();
+                }
+                if (!$order->address->rajaongkir_destination_id) {
+                    $resolved = $rajaongkir->resolveDestinationId($order->address);
+                    if ($resolved) $order->address->forceFill(['rajaongkir_destination_id' => $resolved])->save();
+                }
+                $create = $rajaongkir->createOrder($this->buildRajaOngkirOrderPayload($order, $vendor));
+                $raw = $create['raw'] ?? null;
+                $data = $create['data'] ?? [];
+                $rajaongkirOrderNo = $data['order_no'] ?? $data['order_number'] ?? $data['order_id'] ?? null;
+                $tracking = $data['awb'] ?? $data['tracking_no'] ?? $tracking;
+                $shippingPayload['rajaongkir_create_order'] = $raw;
+            }
+        } catch (\Throwable $e) {
+            \Log::warning('RajaOngkir create order failed: ' . $e->getMessage(), ['order_id' => $order->id]);
+            $shippingPayload['rajaongkir_error'] = $e->getMessage();
+        }
+
+        $order->update([
+            'status' => 'SHIPPED',
+            'shipped_at' => now(),
+            'tracking_no' => $tracking,
+            'rajaongkir_order_no' => $rajaongkirOrderNo,
+            'shipping_payload' => $shippingPayload,
+        ]);
 
         // Email notif ke pembeli
         if ($order->user) {
@@ -323,6 +376,53 @@ class SellerController extends Controller
         }
 
         return response()->json(['ok' => true, 'tracking_no' => $tracking]);
+    }
+
+    private function buildRajaOngkirOrderPayload(Order $order, Vendor $vendor): array
+    {
+        $address = $order->address;
+        $user = $order->user;
+        $items = $order->items->map(function ($item) {
+            return [
+                'product_name' => $item->product_name,
+                'product_variant_name' => $item->variant_selection ?: '-',
+                'product_price' => (int) $item->price,
+                'product_weight' => max(1, (int) ($item->product?->weight ?? 500)),
+                'product_width' => 10,
+                'product_height' => 10,
+                'product_length' => 10,
+                'qty' => (int) $item->quantity,
+                'subtotal' => (int) $item->price * (int) $item->quantity,
+            ];
+        })->values()->all();
+
+        return [
+            'order_date' => now()->toDateString(),
+            'brand_name' => $vendor->name,
+            'shipper_name' => $vendor->name,
+            'shipper_phone' => $vendor->user?->phone ?: '081234567890',
+            'shipper_destination_id' => (int) ($vendor->rajaongkir_destination_id ?: 0),
+            'shipper_address' => $vendor->full_address ?: trim("{$vendor->village}, {$vendor->district}, {$vendor->city}"),
+            'origin_pin_point' => $vendor->latitude && $vendor->longitude ? "{$vendor->latitude}, {$vendor->longitude}" : null,
+            'shipper_email' => $vendor->user?->email ?: config('mail.from.address', 'admin@example.com'),
+            'receiver_name' => $address->recipient,
+            'receiver_phone' => $address->phone,
+            'receiver_destination_id' => (int) ($address->rajaongkir_destination_id ?: 0),
+            'receiver_address' => $address->full_address,
+            'receiver_email' => $user?->email,
+            'destination_pin_point' => $address->latitude && $address->longitude ? "{$address->latitude}, {$address->longitude}" : null,
+            'shipping' => $order->courier_name,
+            'shipping_type' => $order->courier_service ?: $order->shipping_type ?: 'REG',
+            'payment_method' => 'BANK TRANSFER',
+            'shipping_cost' => (int) $order->shipping,
+            'shipping_cashback' => (int) $order->shipping_cashback,
+            'service_fee' => (int) $order->shipping_service_fee,
+            'additional_cost' => 0,
+            'grand_total' => (int) $order->total,
+            'cod_value' => 0,
+            'insurance_value' => (float) $order->insurance,
+            'order_details' => $items,
+        ];
     }
 
     public function dismissWarning(Request $request)
@@ -420,8 +520,14 @@ class SellerController extends Controller
 
     private function validateVoucher(Request $request, bool $partial = false): array
     {
+        if ($request->has('code')) {
+            $request->merge([
+                'code' => strtoupper(preg_replace('/\s+/', '-', trim((string) $request->input('code')))),
+            ]);
+        }
+
         $sometimes = $partial ? 'sometimes|' : '';
-        return $request->validate([
+        $data = $request->validate([
             'code' => $sometimes . 'required|string|max:30|regex:/^[A-Za-z0-9_-]+$/',
             'type' => $sometimes . 'required|in:FIXED,PERCENT',
             'value' => $sometimes . 'required|integer|min:1',
@@ -434,6 +540,19 @@ class SellerController extends Controller
             'product_ids' => 'sometimes|array',
             'product_ids.*' => 'integer|exists:products,id',
         ]);
+
+        $type = $data['type'] ?? $request->input('type');
+        if ($type === 'PERCENT' && isset($data['value']) && (int) $data['value'] > 100) {
+            throw ValidationException::withMessages([
+                'value' => 'Voucher persen maksimal 100%.',
+            ]);
+        }
+
+        if (!empty($data['code'])) {
+            $data['code'] = strtoupper(trim($data['code']));
+        }
+
+        return $data;
     }
 
     private function syncVoucherProducts(SellerVoucher $voucher, int $vendorId, array $productIds): void
@@ -523,6 +642,40 @@ SVG;
         $label = htmlspecialchars(mb_substr($name, 0, 16));
         $svg = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 400'><rect width='400' height='400' fill='{$color}'/><text x='200' y='220' text-anchor='middle' font-size='28' font-weight='700' fill='#fff' font-family='Inter,sans-serif'>{$label}</text></svg>";
         return 'data:image/svg+xml;utf8,' . rawurlencode($svg);
+    }
+
+    private function normalizeVariants(?array $variants): ?array
+    {
+        if (!$variants) return null;
+
+        $clean = [];
+        foreach ($variants as $name => $options) {
+            $name = trim((string) $name);
+            if ($name === '' || !is_array($options)) continue;
+
+            $normalizedOptions = [];
+            foreach ($options as $option) {
+                if (is_string($option)) {
+                    $label = trim($option);
+                    $image = null;
+                } elseif (is_array($option)) {
+                    $label = trim((string) ($option['label'] ?? $option['name'] ?? $option['value'] ?? ''));
+                    $image = isset($option['image']) ? trim((string) $option['image']) : null;
+                } else {
+                    continue;
+                }
+                if ($label === '' || mb_strlen($label) > 50) continue;
+                $row = ['label' => $label];
+                if ($image) $row['image'] = $image;
+                $normalizedOptions[] = $row;
+            }
+
+            if ($normalizedOptions) {
+                $clean[mb_substr($name, 0, 50)] = $normalizedOptions;
+            }
+        }
+
+        return $clean ?: null;
     }
 
     private function validateInlineImage(string $value, string $label, int $maxMb): void

@@ -98,6 +98,7 @@ export const apiEndpoints = {
   ordersActiveCount: () => api('/orders/active-count'),
   order:          (id: string|number) => api(`/orders/${id}`),
   checkout:       (b: any)     => api('/checkout', { method: 'POST', body: b }),
+  shippingRates:  (b: any)     => api('/checkout/shipping-rates', { method: 'POST', body: b }),
   applyVoucher:   (b: any)     => api('/checkout/apply-voucher', { method: 'POST', body: b }),
   refreshOrder:   (id: string|number) => api(`/orders/${id}/refresh`, { method: 'POST' }),
   simulateOrder:  (id: string|number) => api(`/orders/${id}/simulate`,{ method: 'POST' }),
@@ -162,7 +163,7 @@ export const apiEndpoints = {
   /* admin */
   adminStats:        () => api('/admin/stats'),
   adminFreshStartSummary: () => api('/admin/fresh-start/summary'),
-  adminFreshStart:   () => api('/admin/fresh-start', { method: 'POST', body: { confirm: 'FRESH_START' } as any }),
+  adminFreshStart:   (password: string) => api('/admin/fresh-start', { method: 'POST', body: { confirm: 'FRESH_START', password } as any }),
   adminUsers:        (q='') => api('/admin/users' + (q ? '?'+q : '')),
   adminUser:         (id: number) => api(`/admin/users/${id}`),
   adminDeleteUser:   (id: number) => api(`/admin/users/${id}`, { method: 'DELETE' }),

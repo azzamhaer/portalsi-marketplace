@@ -40,6 +40,7 @@ export const auth = createAuthStore();
 
 /* ===== Cart store ===== */
 export interface CartItem {
+  cart_key?: string;
   product_id: number;
   product_slug?: string | null;
   name: string;
@@ -49,6 +50,7 @@ export interface CartItem {
   vendor_name: string;
   vendor_username?: string | null;
   variant_selection?: string | null;
+  variant_details?: Record<string, { label: string; image?: string | null }> | null;
   qty: number;
   stock: number;
   checked: boolean;
@@ -68,14 +70,15 @@ function createCartStore() {
     get checkedItems() { return items.filter(i => i.checked); },
     get subtotal() { return items.filter(i => i.checked).reduce((s,i) => s + i.price * i.qty, 0); },
     add(it: Omit<CartItem, 'qty'|'checked'> & { qty?: number }) {
-      const existing = items.find(i => i.product_id === it.product_id);
+      const cartKey = it.cart_key || `${it.product_id}:${it.variant_selection || ''}`;
+      const existing = items.find(i => (i.cart_key || `${i.product_id}:${i.variant_selection || ''}`) === cartKey);
       if (existing) existing.qty = Math.min(it.stock, existing.qty + (it.qty ?? 1));
-      else items = [...items, { ...it, qty: it.qty ?? 1, checked: true }];
+      else items = [...items, { ...it, cart_key: cartKey, qty: it.qty ?? 1, checked: true }];
       save();
     },
-    update(id: number, qty: number) { items = items.map(i => i.product_id === id ? { ...i, qty: Math.max(1, Math.min(i.stock, qty)) } : i); save(); },
-    remove(id: number) { items = items.filter(i => i.product_id !== id); save(); },
-    toggleCheck(id: number) { items = items.map(i => i.product_id === id ? { ...i, checked: !i.checked } : i); save(); },
+    update(key: string | number, qty: number) { items = items.map(i => (i.cart_key || i.product_id) === key ? { ...i, qty: Math.max(1, Math.min(i.stock, qty)) } : i); save(); },
+    remove(key: string | number) { items = items.filter(i => (i.cart_key || i.product_id) !== key); save(); },
+    toggleCheck(key: string | number) { items = items.map(i => (i.cart_key || i.product_id) === key ? { ...i, checked: !i.checked } : i); save(); },
     checkAll(state: boolean) { items = items.map(i => ({ ...i, checked: state })); save(); },
     clear() { items = []; save(); },
     clearChecked() { items = items.filter(i => !i.checked); save(); }

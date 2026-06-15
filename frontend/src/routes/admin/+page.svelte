@@ -3,50 +3,14 @@
   import { onMount } from 'svelte';
   import { apiEndpoints } from '$lib/api';
   import { fmtRp } from '$lib/utils';
-  import { toast, confirmDialog } from '$lib/stores.svelte';
+  import { toast } from '$lib/stores.svelte';
 
   let stats = $state<any>(null);
-  let freshSummary = $state<any>(null);
-  let freshLoading = $state(false);
-  let freshRunning = $state(false);
   let loading = $state(true);
   onMount(async () => {
     try { stats = await apiEndpoints.adminStats(); }
     finally { loading = false; }
   });
-
-  async function loadFreshSummary() {
-    freshLoading = true;
-    try {
-      freshSummary = await apiEndpoints.adminFreshStartSummary();
-    } catch (e: any) {
-      toast.error(e.message || 'Gagal memuat ringkasan fresh start');
-    } finally {
-      freshLoading = false;
-    }
-  }
-
-  async function runFreshStart() {
-    if (!freshSummary) await loadFreshSummary();
-    const ok = await confirmDialog.ask({
-      title: 'Hapus semua data testing?',
-      message: 'Aksi ini menghapus semua user non-admin, vendor, produk, order, chat, laporan, wishlist, review, voucher, withdrawal, notifikasi, dan token terkait. Settings app, kurir, payment methods, FAQ, kategori, tag, dan admin tetap aman.',
-      confirmText: 'Ya, fresh start',
-      tone: 'danger',
-    });
-    if (!ok) return;
-    freshRunning = true;
-    try {
-      await apiEndpoints.adminFreshStart();
-      toast.success('Data testing berhasil dibersihkan');
-      freshSummary = await apiEndpoints.adminFreshStartSummary();
-      stats = await apiEndpoints.adminStats();
-    } catch (e: any) {
-      toast.error(e.message || 'Fresh start gagal');
-    } finally {
-      freshRunning = false;
-    }
-  }
 
   const cards = $derived(stats ? [
     { i:'users',          l:'Total Users',        v: stats.users,          h:'/admin/users' },
@@ -81,40 +45,6 @@
       <a href="/admin/vendors?status=PENDING" class="btn-outline btn-md">Verifikasi vendor pending</a>
       <a href="/admin/settings" class="btn-outline btn-md">Edit branding & Tripay</a>
       <a href="/admin/returns" class="btn-outline btn-md">Tinjau permintaan return</a>
-    </div>
-  </div>
-
-  <div class="card mt-6 border-red-100 bg-red-50/40">
-    <div class="flex items-start gap-3">
-      <div class="grid h-10 w-10 place-items-center rounded-xl bg-red-100 text-red-700">
-        <Icon name="database-zap" size={18} />
-      </div>
-      <div class="min-w-0 flex-1">
-        <h3 class="font-semibold text-red-900">Fresh Start Data Testing</h3>
-        <p class="mt-1 text-sm text-red-800/80">
-          Membersihkan data hasil migrate seed/testing: user non-admin, vendor, produk, order, chat, laporan, wishlist, review, voucher, withdrawal, dan notifikasi. Konfigurasi app tetap disimpan.
-        </p>
-        {#if freshSummary}
-          <div class="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-            <div class="rounded-xl bg-white p-3"><b>{freshSummary.users_removed}</b><br />User non-admin</div>
-            <div class="rounded-xl bg-white p-3"><b>{freshSummary.vendors}</b><br />Vendor</div>
-            <div class="rounded-xl bg-white p-3"><b>{freshSummary.products}</b><br />Produk</div>
-            <div class="rounded-xl bg-white p-3"><b>{freshSummary.orders}</b><br />Pesanan</div>
-            <div class="rounded-xl bg-white p-3"><b>{freshSummary.chats}</b><br />Chat thread</div>
-            <div class="rounded-xl bg-white p-3"><b>{freshSummary.reports}</b><br />Laporan</div>
-            <div class="rounded-xl bg-white p-3"><b>{freshSummary.notifications}</b><br />Notifikasi</div>
-            <div class="rounded-xl bg-white p-3"><b>{freshSummary.admins_kept}</b><br />Admin tetap</div>
-          </div>
-        {/if}
-        <div class="mt-4 flex flex-wrap gap-2">
-          <button type="button" on:click={loadFreshSummary} disabled={freshLoading} class="btn-outline btn-sm">
-            <Icon name="list-checks" size={13} /> {freshLoading ? 'Memuat...' : 'Lihat ringkasan'}
-          </button>
-          <button type="button" on:click={runFreshStart} disabled={freshRunning} class="btn-danger btn-sm">
-            <Icon name="trash-2" size={13} /> {freshRunning ? 'Membersihkan...' : 'Hapus data testing'}
-          </button>
-        </div>
-      </div>
     </div>
   </div>
 {/if}

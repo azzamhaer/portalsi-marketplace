@@ -15,6 +15,7 @@ class Vendor extends Model
     protected $fillable = [
         'user_id', 'name', 'slug', 'username', 'username_changed_at',
         'city', 'country', 'province', 'district', 'village', 'postal_code',
+        'province_id', 'city_id', 'district_id', 'village_id', 'rajaongkir_destination_id',
         'latitude', 'longitude', 'full_address', 'address_note',
         'description', 'avatar', 'banner', 'ktp_image', 'verification_status', 'verification_note',
         'bank_name', 'bank_account', 'bank_holder',
@@ -28,6 +29,7 @@ class Vendor extends Model
         'rating'              => 'float',
         'latitude'            => 'float',
         'longitude'           => 'float',
+        'rajaongkir_destination_id' => 'integer',
         'username_changed_at' => 'datetime',
         'tour_completed_at'   => 'datetime',
         'is_banned'           => 'boolean',

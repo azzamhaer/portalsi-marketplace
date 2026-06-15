@@ -1,11 +1,15 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { apiEndpoints } from '$lib/api';
-  import { toast, settings as settingsStore } from '$lib/stores.svelte';
+  import { toast, settings as settingsStore, confirmDialog } from '$lib/stores.svelte';
   import Icon from '$lib/components/Icon.svelte';
 
   let s = $state<any>(null);
   let saving = $state(false);
+  let freshSummary = $state<any>(null);
+  let freshLoading = $state(false);
+  let freshRunning = $state(false);
+  let freshPassword = $state('');
 
   onMount(async () => {
     s = await apiEndpoints.adminSettings();
@@ -19,6 +23,10 @@
         tripay_api_key: s.tripay_api_key,
         tripay_private_key: s.tripay_private_key,
         tripay_merchant_code: s.tripay_merchant_code,
+        rajaongkir_mode: s.rajaongkir_mode,
+        rajaongkir_api_key: s.rajaongkir_api_key,
+        rajaongkir_tariff_base_url: s.rajaongkir_tariff_base_url,
+        rajaongkir_order_base_url: s.rajaongkir_order_base_url,
         commission_percent: Number(s.commission_percent),
         brevo_api_key: s.brevo_api_key,
         brevo_sender_email: s.brevo_sender_email,
@@ -28,6 +36,39 @@
       settingsStore.setAll(pub);
       toast.success('Pengaturan disimpan');
     } catch (e: any) { toast.error(e.message); } finally { saving = false; }
+  }
+
+  async function loadFreshSummary() {
+    freshLoading = true;
+    try {
+      freshSummary = await apiEndpoints.adminFreshStartSummary();
+    } catch (e: any) {
+      toast.error(e.message || 'Gagal memuat ringkasan migrate fresh');
+    } finally {
+      freshLoading = false;
+    }
+  }
+
+  async function runMigrateFresh() {
+    if (!freshPassword) { toast.warn('Masukkan password admin'); return; }
+    const ok = await confirmDialog.ask({
+      title: 'Jalankan Migrate Fresh?',
+      message: 'Aksi ini menghapus seluruh data transaksi/testing non-konfigurasi. Admin, settings, kategori, tag, FAQ, kurir, dan payment method tetap disimpan.',
+      confirmText: 'Migrate Fresh',
+      tone: 'danger',
+    });
+    if (!ok) return;
+    freshRunning = true;
+    try {
+      await apiEndpoints.adminFreshStart(freshPassword);
+      freshPassword = '';
+      toast.success('Migrate fresh selesai');
+      freshSummary = await apiEndpoints.adminFreshStartSummary();
+    } catch (e: any) {
+      toast.error(e.message || 'Migrate fresh gagal');
+    } finally {
+      freshRunning = false;
+    }
   }
 </script>
 
@@ -100,6 +141,58 @@
         <div><label class="label">Merchant Code</label><input bind:value={s.tripay_merchant_code} class="input" placeholder="T0001" /></div>
         <div><label class="label">API Key</label><input bind:value={s.tripay_api_key} class="input font-mono text-xs" /></div>
         <div><label class="label">Private Key</label><input type="password" bind:value={s.tripay_private_key} class="input font-mono text-xs" /></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 class="font-semibold mb-4">RajaOngkir / Komerce Shipping</h3>
+      <p class="text-xs text-ink-500 mb-4">API ini dipakai untuk cari destinasi, hitung ongkir live saat checkout, dan mencoba membuat data order/AWB saat seller mengirim pesanan.</p>
+      <div class="grid sm:grid-cols-2 gap-4">
+        <div>
+          <label class="label">Mode</label>
+          <select bind:value={s.rajaongkir_mode} class="input">
+            <option value="sandbox">Sandbox</option>
+            <option value="production">Production</option>
+          </select>
+        </div>
+        <div><label class="label">API Key</label><input type="password" bind:value={s.rajaongkir_api_key} class="input font-mono text-xs" /></div>
+        <div><label class="label">Tariff Base URL (opsional)</label><input bind:value={s.rajaongkir_tariff_base_url} class="input font-mono text-xs" placeholder="default otomatis sesuai mode" /></div>
+        <div><label class="label">Order Base URL (opsional)</label><input bind:value={s.rajaongkir_order_base_url} class="input font-mono text-xs" placeholder="default otomatis sesuai mode" /></div>
+      </div>
+    </div>
+
+    <div class="card border-red-100 bg-red-50/40">
+      <div class="flex items-start gap-3">
+        <div class="grid h-10 w-10 place-items-center rounded-xl bg-red-100 text-red-700">
+          <Icon name="database-zap" size={18} />
+        </div>
+        <div class="min-w-0 flex-1">
+          <h3 class="font-semibold text-red-900">Migrate Fresh</h3>
+          <p class="mt-1 text-sm text-red-800/80">
+            Membersihkan data testing seperti user non-admin, vendor, produk, order, chat, laporan, wishlist, review, voucher, withdrawal, dan notifikasi. Masukkan password admin untuk menjalankan.
+          </p>
+          {#if freshSummary}
+            <div class="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+              <div class="rounded-xl bg-white p-3"><b>{freshSummary.users_removed}</b><br />User non-admin</div>
+              <div class="rounded-xl bg-white p-3"><b>{freshSummary.vendors}</b><br />Vendor</div>
+              <div class="rounded-xl bg-white p-3"><b>{freshSummary.products}</b><br />Produk</div>
+              <div class="rounded-xl bg-white p-3"><b>{freshSummary.orders}</b><br />Pesanan</div>
+              <div class="rounded-xl bg-white p-3"><b>{freshSummary.chats}</b><br />Chat thread</div>
+              <div class="rounded-xl bg-white p-3"><b>{freshSummary.reports}</b><br />Laporan</div>
+              <div class="rounded-xl bg-white p-3"><b>{freshSummary.notifications}</b><br />Notifikasi</div>
+              <div class="rounded-xl bg-white p-3"><b>{freshSummary.admins_kept}</b><br />Admin tetap</div>
+            </div>
+          {/if}
+          <div class="mt-4 grid gap-2 sm:grid-cols-[1fr_auto_auto]">
+            <input type="password" bind:value={freshPassword} class="input bg-white" placeholder="Password admin" />
+            <button type="button" on:click={loadFreshSummary} disabled={freshLoading} class="btn-outline btn-sm bg-white">
+              <Icon name="list-checks" size={13} /> {freshLoading ? 'Memuat...' : 'Ringkasan'}
+            </button>
+            <button type="button" on:click={runMigrateFresh} disabled={freshRunning || !freshPassword} class="btn-danger btn-sm">
+              <Icon name="trash-2" size={13} /> {freshRunning ? 'Memproses...' : 'Migrate Fresh'}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
 

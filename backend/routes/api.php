@@ -65,6 +65,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/orders/active-count',  [OrderController::class, 'activeCount']);
     Route::get('/orders/{id}',          [OrderController::class, 'show']);
     Route::post('/checkout',            [OrderController::class, 'checkout']);
+    Route::post('/checkout/shipping-rates', [OrderController::class, 'shippingRates']);
     Route::post('/checkout/apply-voucher', [OrderController::class, 'applyVoucher']);
     Route::post('/orders/{id}/refresh', [OrderController::class, 'refreshStatus']);
     Route::post('/orders/{id}/simulate',[OrderController::class, 'simulatePay']);

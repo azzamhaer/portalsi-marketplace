@@ -23,9 +23,9 @@
     const ok = await confirmDialog.ask({ title: 'Hapus item terpilih?', message: 'Produk yang dicentang akan dihapus dari keranjang.', confirmText: 'Hapus', tone: 'danger' });
     if (ok) cart.clearChecked();
   }
-  async function removeItem(id: number) {
+  async function removeItem(key: string | number) {
     const ok = await confirmDialog.ask({ title: 'Hapus produk?', message: 'Produk ini akan dihapus dari keranjang.', confirmText: 'Hapus', tone: 'danger' });
-    if (ok) cart.remove(id);
+    if (ok) cart.remove(key);
   }
 </script>
 
@@ -69,9 +69,9 @@
               <Icon name="store" size={14} class="text-ink-500" />
               <a href={items[0].vendor_username ? `/${items[0].vendor_username}` : `/vendors/${vid}`} class="font-semibold text-sm hover:text-ink-950">{items[0].vendor_name}</a>
             </div>
-            {#each items as it (it.product_id)}
+            {#each items as it (it.cart_key || it.product_id)}
               <div class="flex items-start sm:items-center gap-3 py-3 border-b border-ink-100 last:border-0">
-                <input type="checkbox" checked={it.checked} on:change={() => cart.toggleCheck(it.product_id)} class="mt-2 sm:mt-0" />
+                <input type="checkbox" checked={it.checked} on:change={() => cart.toggleCheck(it.cart_key || it.product_id)} class="mt-2 sm:mt-0" />
                 <a href={`/product/${it.product_slug || it.product_id}`} class="shrink-0">
                   <img src={it.image} alt="" class="w-16 h-16 sm:w-20 sm:h-20 rounded-xl object-cover" />
                 </a>
@@ -81,19 +81,19 @@
                   <div class="text-sm font-semibold text-ink-950 mt-1">{fmtRp(it.price)}</div>
                   <div class="flex items-center gap-2 mt-2 sm:hidden">
                     <div class="inline-flex items-center border border-ink-200 rounded-full">
-                      <button on:click={() => cart.update(it.product_id, it.qty - 1)} class="w-7 h-7 grid place-items-center"><Icon name="minus" size={12} /></button>
+                      <button on:click={() => cart.update(it.cart_key || it.product_id, it.qty - 1)} class="w-7 h-7 grid place-items-center"><Icon name="minus" size={12} /></button>
                       <span class="w-8 text-center text-sm">{it.qty}</span>
-                      <button on:click={() => cart.update(it.product_id, it.qty + 1)} class="w-7 h-7 grid place-items-center"><Icon name="plus" size={12} /></button>
+                      <button on:click={() => cart.update(it.cart_key || it.product_id, it.qty + 1)} class="w-7 h-7 grid place-items-center"><Icon name="plus" size={12} /></button>
                     </div>
-                    <button on:click={() => removeItem(it.product_id)} class="ml-auto w-8 h-8 grid place-items-center text-red-600 hover:bg-red-50 rounded-full"><Icon name="trash-2" size={14} /></button>
+                    <button on:click={() => removeItem(it.cart_key || it.product_id)} class="ml-auto w-8 h-8 grid place-items-center text-red-600 hover:bg-red-50 rounded-full"><Icon name="trash-2" size={14} /></button>
                   </div>
                 </div>
                 <div class="hidden sm:inline-flex items-center border border-ink-200 rounded-full">
-                  <button on:click={() => cart.update(it.product_id, it.qty - 1)} class="w-8 h-8 grid place-items-center hover:bg-ink-50 rounded-l-full"><Icon name="minus" size={12} /></button>
+                  <button on:click={() => cart.update(it.cart_key || it.product_id, it.qty - 1)} class="w-8 h-8 grid place-items-center hover:bg-ink-50 rounded-l-full"><Icon name="minus" size={12} /></button>
                   <span class="w-9 text-center text-sm">{it.qty}</span>
-                  <button on:click={() => cart.update(it.product_id, it.qty + 1)} class="w-8 h-8 grid place-items-center hover:bg-ink-50 rounded-r-full"><Icon name="plus" size={12} /></button>
+                  <button on:click={() => cart.update(it.cart_key || it.product_id, it.qty + 1)} class="w-8 h-8 grid place-items-center hover:bg-ink-50 rounded-r-full"><Icon name="plus" size={12} /></button>
                 </div>
-                <button on:click={() => removeItem(it.product_id)} class="hidden sm:grid w-8 h-8 place-items-center text-red-600 hover:bg-red-50 rounded-full">
+                <button on:click={() => removeItem(it.cart_key || it.product_id)} class="hidden sm:grid w-8 h-8 place-items-center text-red-600 hover:bg-red-50 rounded-full">
                   <Icon name="trash-2" size={14} />
                 </button>
               </div>

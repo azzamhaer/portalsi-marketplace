@@ -11,6 +11,7 @@
   let price = $state(product?.price?.toString() ?? '');
   let original_price = $state(product?.original_price?.toString() ?? '');
   let stock = $state(product?.stock?.toString() ?? '10');
+  let weight = $state(product?.weight?.toString() ?? '500');
   let images = $state<string[]>(
     Array.isArray(product?.images) && product.images.length
       ? product.images
@@ -21,8 +22,8 @@
   let tagInput = $state('');
   let tags = $state<string[]>(product?.tags ?? []);
 
-  // Variants — { "Warna": ["Merah","Biru"], "Ukuran": ["S","M","L"] }
-  let variants = $state<Record<string, string[]>>(
+  // Variants: { "Warna": [{ label:"Merah", image:"..." }], "Ukuran": [{ label:"S" }] }
+  let variants = $state<Record<string, any[]>>(
     product?.variants && typeof product.variants === 'object' ? product.variants : {}
   );
   let newAttrName = $state('');
@@ -40,11 +41,29 @@
     const v = val.trim();
     if (!v) return;
     const list = variants[key] ?? [];
-    if (list.includes(v)) return;
-    variants = { ...variants, [key]: [...list, v] };
+    if (list.some((x) => optLabel(x) === v)) return;
+    variants = { ...variants, [key]: [...list, { label: v, image: '' }] };
   }
-  function removeOpt(key: string, val: string) {
+  function removeOpt(key: string, val: any) {
     variants = { ...variants, [key]: variants[key].filter(x => x !== val) };
+  }
+  function optLabel(opt: any) {
+    return typeof opt === 'string' ? opt : (opt?.label ?? '');
+  }
+  function optImage(opt: any) {
+    return typeof opt === 'object' ? (opt?.image ?? '') : '';
+  }
+  function setOptImage(key: string, opt: any, image: string) {
+    variants = { ...variants, [key]: (variants[key] ?? []).map((x) => x === opt ? { label: optLabel(x), image } : x) };
+  }
+  function onVariantImage(e: any, key: string, opt: any) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 1024 * 1024) { toast.warn(`${file.name} > 1MB, dilewati`); e.target.value = ''; return; }
+    const r = new FileReader();
+    r.onload = () => setOptImage(key, opt, r.result as string);
+    r.readAsDataURL(file);
+    e.target.value = '';
   }
 
   function addTag() {
@@ -82,13 +101,17 @@
     try {
       const cleanVariants: any = {};
       for (const [k, v] of Object.entries(variants)) {
-        if (Array.isArray(v) && v.length) cleanVariants[k] = v;
+        if (Array.isArray(v) && v.length) {
+          const opts = v.map((opt) => ({ label: optLabel(opt), image: optImage(opt) })).filter((opt) => opt.label);
+          if (opts.length) cleanVariants[k] = opts;
+        }
       }
       const body: any = {
         name, description,
         price: +price,
         original_price: original_price ? +original_price : null,
         stock: +stock,
+        weight: +weight,
         image: images[0] || '',
         images,
         variants: Object.keys(cleanVariants).length ? cleanVariants : null,
@@ -122,10 +145,11 @@
     </div>
   </div>
 
-  <div class="grid sm:grid-cols-3 gap-3">
+  <div class="grid sm:grid-cols-4 gap-3">
     <div><label class="label">Harga (Rp)</label><input type="number" min="1" bind:value={price} class="input" required /></div>
     <div><label class="label">Harga Coret</label><input type="number" min="0" bind:value={original_price} class="input" /></div>
     <div><label class="label">Stok</label><input type="number" min="0" bind:value={stock} class="input" required /></div>
+    <div><label class="label">Berat (gram)</label><input type="number" min="1" bind:value={weight} class="input" required /></div>
   </div>
 
   <div><label class="label">Deskripsi</label><textarea rows={4} bind:value={description} class="input" required /></div>
@@ -169,12 +193,20 @@
             <b class="text-sm">{key}</b>
             <button type="button" on:click={() => removeAttr(key)} class="text-xs text-red-600 hover:underline flex items-center gap-1"><Icon name="trash-2" size={12} /> Hapus atribut</button>
           </div>
-          <div class="flex flex-wrap gap-1.5 mb-2">
+          <div class="flex flex-wrap gap-2 mb-2">
             {#each opts as o}
-              <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white border border-ink-200 text-xs">
-                {o}
-                <button type="button" on:click={() => removeOpt(key, o)} class="text-red-600"><Icon name="x" size={10} /></button>
-              </span>
+              <div class="w-[92px] rounded-xl border border-ink-200 bg-white p-2 text-center text-xs">
+                <label class="mb-1 grid h-12 cursor-pointer place-items-center overflow-hidden rounded-lg bg-ink-50">
+                  {#if optImage(o)}
+                    <img src={optImage(o)} alt="" class="h-full w-full object-cover" />
+                  {:else}
+                    <Icon name="image-plus" size={16} class="text-ink-400" />
+                  {/if}
+                  <input type="file" accept="image/*" on:change={(e) => onVariantImage(e, key, o)} class="hidden" />
+                </label>
+                <div class="truncate" title={optLabel(o)}>{optLabel(o)}</div>
+                <button type="button" on:click={() => removeOpt(key, o)} class="mt-1 inline-flex items-center gap-1 text-[11px] text-red-600"><Icon name="x" size={10} /> Hapus</button>
+              </div>
             {/each}
           </div>
           <div class="flex gap-2">

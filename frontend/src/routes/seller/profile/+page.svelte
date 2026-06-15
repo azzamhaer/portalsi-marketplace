@@ -119,6 +119,10 @@
       toast.success('Banner toko diperbarui');
     } catch (e: any) { toast.error(e.message); } finally { uploadingBanner = false; input.value = ''; }
   }
+
+  function addressQuery(a: any) {
+    return [a.village, a.district, a.city, a.province, a.postal_code, 'Indonesia'].filter(Boolean).join(', ');
+  }
 </script>
 
 <svelte:head><title>Profil Toko</title></svelte:head>
@@ -216,7 +220,7 @@
             <AddressFields bind:value={v} contact={false} title="Alamat Toko" />
             <div>
               <label class="label">Pin Lokasi Toko</label>
-              <MapPicker bind:lat={v.latitude} bind:lng={v.longitude} />
+              <MapPicker bind:lat={v.latitude} bind:lng={v.longitude} query={addressQuery(v)} />
             </div>
             <div class="grid sm:grid-cols-3 gap-3 pt-3 border-t border-ink-100">
               <div><label class="label">Bank</label>

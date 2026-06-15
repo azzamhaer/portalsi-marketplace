@@ -98,6 +98,10 @@
     try { await apiEndpoints.deleteAddress(id); addresses = await apiEndpoints.addresses(); }
     catch (e: any) { toast.error(e.message); }
   }
+
+  function addressQuery(a: any) {
+    return [a.village, a.district, a.city, a.province, a.postal_code, 'Indonesia'].filter(Boolean).join(', ');
+  }
 </script>
 
 <svelte:head><title>Profil</title></svelte:head>
@@ -209,7 +213,7 @@
               <AddressFields bind:value={formAddr} />
               <div>
                 <label class="label">Pin Lokasi (opsional)</label>
-                <MapPicker bind:lat={formAddr.latitude} bind:lng={formAddr.longitude} />
+                <MapPicker bind:lat={formAddr.latitude} bind:lng={formAddr.longitude} query={addressQuery(formAddr)} />
               </div>
               <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={formAddr.is_default} /> Jadikan alamat utama</label>
               <div class="flex gap-2">

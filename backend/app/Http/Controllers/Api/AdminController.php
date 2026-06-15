@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Models\Vendor;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
@@ -65,7 +66,12 @@ class AdminController extends Controller
     {
         $data = $request->validate([
             'confirm' => 'required|in:FRESH_START',
+            'password' => 'required|string',
         ]);
+
+        if (!Hash::check($data['password'], $request->user()->password)) {
+            return response()->json(['message' => 'Password admin tidak valid'], 422);
+        }
 
         DB::transaction(function () {
             $nonAdminIds = User::where('role', '!=', 'ADMIN')->pluck('id');

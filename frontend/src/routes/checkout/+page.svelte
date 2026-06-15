@@ -18,13 +18,18 @@
     { name: 'Pos Indonesia', eta: '3-5 hari', cost: 9000 },
   ];
 
-  let ship = $state<any>({ recipient: '', phone: '', country: 'Indonesia', province: '', city: '', district: '', village: '', postal_code: '', full_address: '', address_note: '' });
+  let ship = $state<any>({ recipient: '', phone: '', country: 'Indonesia', province: '', city: '', district: '', village: '', postal_code: '', full_address: '', address_note: '', latitude: null, longitude: null });
   let addresses = $state<any[]>([]);
   let selectedAddressId = $state('');
   let notes = $state('');
-  let courier = $state(COURIERS[0]);
+  let couriers = $state<any[]>(COURIERS);
+  let courier = $state<any>(COURIERS[0]);
+  let shippingLoading = $state(false);
+  let shippingError = $state('');
+  let rateTimer: any;
   let pay = $state<string | null>(null);
   let loading = $state(false);
+  let checkoutError = $state('');
   let voucherCodes = $state<Record<number, string>>({});
   let voucherLoading = $state<Record<number, boolean>>({});
   let voucherErrors = $state<Record<number, string>>({});
@@ -35,7 +40,7 @@
   const discountTotal = $derived(Object.values(appliedVouchers).reduce((sum: number, v: any) => sum + (v?.discount ?? 0), 0));
   const discountedSubtotal = $derived(Math.max(0, subtotal - discountTotal));
   const insurance = $derived(discountedSubtotal > 500000 ? Math.round(discountedSubtotal * 0.002) : 0);
-  const baseTotal = $derived(discountedSubtotal + courier.cost + insurance);
+  const baseTotal = $derived(discountedSubtotal + (courier?.cost ?? 0) + insurance);
   const method = $derived(pay ? data.methods.find((m: any) => m.code === pay) : null);
   const fee = $derived(method ? Math.round(method.fee_flat + (baseTotal * method.fee_pct / 100)) : 0);
   const total = $derived(baseTotal + fee);
@@ -54,15 +59,52 @@
       addresses = await apiEndpoints.addresses();
       const def = addresses.find((a) => a.is_default) || addresses[0];
       if (def) chooseAddress(String(def.id));
+      else await loadShippingRates();
     } catch {}
   });
 
   function chooseAddress(id: string) {
     selectedAddressId = id;
+    if (!id) {
+      ship = { recipient: auth.user?.name || '', phone: auth.user?.phone || '', country:'Indonesia', province:'', city:'', district:'', village:'', postal_code:'', full_address:'', address_note:'', latitude: null, longitude: null };
+      return;
+    }
     const a = addresses.find((x) => String(x.id) === id);
     if (!a) return;
     ship = { country: 'Indonesia', ...a };
   }
+
+  async function loadShippingRates() {
+    if (!items.length || !ship.city || !ship.full_address) return;
+    shippingLoading = true;
+    shippingError = '';
+    try {
+      const r: any = await apiEndpoints.shippingRates({
+        items: items.map(i => ({ product_id: i.product_id, qty: i.qty })),
+        destination: ship,
+      });
+      couriers = r.options?.length ? r.options : COURIERS;
+      courier = couriers[0] ?? null;
+      if (!r.configured) shippingError = 'RajaOngkir belum dikonfigurasi. Menampilkan estimasi fallback.';
+    } catch (e: any) {
+      couriers = COURIERS;
+      courier = couriers[0];
+      shippingError = e.message || 'Gagal memuat tarif ekspedisi. Menampilkan estimasi fallback.';
+    } finally {
+      shippingLoading = false;
+    }
+  }
+
+  $effect(() => {
+    const key = [
+      items.map((i) => `${i.product_id}:${i.qty}`).join(','),
+      ship.city, ship.district, ship.village, ship.postal_code, ship.latitude, ship.longitude
+    ].join('|');
+    if (!auth.user || !items.length || !ship.city || !ship.full_address) return;
+    clearTimeout(rateTimer);
+    rateTimer = setTimeout(loadShippingRates, 500);
+    return () => clearTimeout(rateTimer);
+  });
 
   function clearVoucher(productId: number) {
     delete appliedVouchers[productId];
@@ -97,6 +139,7 @@
       return;
     }
     if (!pay) { toast.warn('Pilih metode pembayaran'); return; }
+    if (!courier) { toast.warn('Pilih ekspedisi pengiriman'); return; }
     const ok = await confirmDialog.ask({
       title: 'Buat pesanan?',
       message: 'Pesanan akan dibuat dan stok produk akan dikurangi.',
@@ -104,6 +147,7 @@
     });
     if (!ok) return;
     loading = true;
+    checkoutError = '';
     try {
       const res: any = await apiEndpoints.checkout({
         items: items.map(i => ({
@@ -116,23 +160,37 @@
         phone: ship.phone,
         country: 'Indonesia',
         province: ship.province,
+        province_id: ship.province_id,
         city: ship.city,
+        city_id: ship.city_id,
         district: ship.district,
+        district_id: ship.district_id,
         village: ship.village,
+        village_id: ship.village_id,
         postal_code: ship.postal_code,
+        rajaongkir_destination_id: ship.rajaongkir_destination_id,
+        latitude: ship.latitude,
+        longitude: ship.longitude,
         full_address: ship.full_address,
         address_note: ship.address_note,
         notes,
-        courier_name: courier.name,
+        courier_name: courier.courier_name || courier.name,
+        courier_code: courier.courier_code,
+        courier_service: courier.service,
+        shipping_type: courier.type,
         courier_eta: courier.eta,
         courier_cost: courier.cost,
+        shipping_cashback: courier.cashback || 0,
+        shipping_service_fee: courier.service_fee || 0,
+        shipping_payload: courier.raw ? courier : null,
         payment_method: pay,
       });
       cart.clearChecked();
       toast.success('Pesanan dibuat');
       goto('/orders/' + res.order_id);
     } catch (e: any) {
-      toast.error(e.message || 'Gagal');
+      checkoutError = e.message || 'Checkout gagal diproses';
+      toast.error(checkoutError);
       loading = false;
     }
   }
@@ -164,11 +222,17 @@
 
       <div class="card">
         <h3 class="font-semibold mb-4">Pengiriman</h3>
+        {#if shippingLoading}
+          <div class="rounded-xl bg-ink-50 px-3 py-2 text-xs text-ink-600 mb-3">Memuat tarif ekspedisi...</div>
+        {/if}
+        {#if shippingError}
+          <div class="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800 mb-3">{shippingError}</div>
+        {/if}
         <div class="grid sm:grid-cols-2 gap-3">
-          {#each COURIERS as c}
-            <button on:click={() => courier = c} class="text-left p-4 border rounded-2xl transition" class:border-ink-950={courier.name === c.name} class:bg-ink-50={courier.name === c.name} class:border-ink-200={courier.name !== c.name}>
-              <div class="flex justify-between items-center"><b>{c.name}</b><span class="text-sm font-semibold">{fmtRp(c.cost)}</span></div>
-              <div class="text-xs text-ink-500 mt-0.5">Estimasi {c.eta}</div>
+          {#each couriers as c}
+            <button on:click={() => courier = c} class="text-left p-4 border rounded-2xl transition" class:border-ink-950={courier?.name === c.name} class:bg-ink-50={courier?.name === c.name} class:border-ink-200={courier?.name !== c.name}>
+              <div class="flex justify-between items-center gap-3"><b>{c.name}</b><span class="text-sm font-semibold">{fmtRp(c.cost)}</span></div>
+              <div class="text-xs text-ink-500 mt-0.5">Estimasi {c.eta}{#if c.type} · {c.type}{/if}</div>
             </button>
           {/each}
         </div>
@@ -196,7 +260,7 @@
 
       <div class="card">
         <h3 class="font-semibold mb-3">Item ({items.length})</h3>
-        {#each items as it (it.product_id)}
+        {#each items as it (it.cart_key || it.product_id)}
           {@const applied = appliedVouchers[it.product_id]}
           {@const lineSubtotal = it.price * it.qty}
           <div class="flex items-start gap-3 py-3 border-b border-ink-100 last:border-0">
@@ -204,6 +268,7 @@
             <div class="flex-1 min-w-0">
               <div class="text-sm font-medium line-clamp-1">{it.name}</div>
               <div class="text-xs text-ink-500">{it.qty} x {fmtRp(it.price)}</div>
+              {#if it.variant_selection}<div class="text-[11px] text-ink-500 mt-0.5">{it.variant_selection}</div>{/if}
               <div class="mt-2 flex max-w-md gap-2">
                 <input
                   class="input input-sm min-w-0 flex-1 !py-1.5 uppercase"
@@ -253,7 +318,7 @@
             <div class="flex justify-between text-emerald-700"><span>Promo voucher</span><span>-{fmtRp(discountTotal)}</span></div>
             <div class="flex justify-between"><span class="text-ink-500">Subtotal setelah promo</span><span>{fmtRp(discountedSubtotal)}</span></div>
           {/if}
-          <div class="flex justify-between"><span class="text-ink-500">Ongkir</span><span>{fmtRp(courier.cost)}</span></div>
+          <div class="flex justify-between"><span class="text-ink-500">Ongkir</span><span>{courier ? fmtRp(courier.cost) : '-'}</span></div>
           {#if insurance > 0}<div class="flex justify-between"><span class="text-ink-500">Asuransi</span><span>{fmtRp(insurance)}</span></div>{/if}
           <div class="flex justify-between"><span class="text-ink-500">Biaya admin{#if method}<span class="text-ink-400"> ({method.name})</span>{/if}</span><span>{method ? fmtRp(fee) : '-'}</span></div>
           <div class="flex justify-between text-base font-bold pt-3 border-t border-ink-100 mt-3">
@@ -263,6 +328,11 @@
         <button on:click={submit} disabled={loading || !pay} class="btn-primary btn-lg w-full mt-5">
           <Icon name="lock" size={14} /> {loading ? 'Memproses...' : pay ? `Bayar ${fmtRp(total)}` : 'Pilih metode pembayaran'}
         </button>
+        {#if checkoutError}
+          <div class="mt-4 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">
+            {checkoutError}
+          </div>
+        {/if}
         <div class="flex items-start gap-2 mt-4 text-xs text-ink-500">
           <Icon name="shield-check" size={14} class="text-emerald-600 mt-0.5 shrink-0" />
           <span>Transaksi diproses dengan enkripsi end-to-end.</span>

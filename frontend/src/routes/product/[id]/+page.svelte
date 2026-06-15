@@ -30,9 +30,27 @@
   function nextImg() { activeImgIdx = (activeImgIdx + 1) % images.length; }
   function prevImg() { activeImgIdx = (activeImgIdx - 1 + images.length) % images.length; }
 
-  // Variants state — p.variants: { Warna: [..], Ukuran: [..] }
+  // Variants state: supports old ["Merah"] and new [{ label, image }].
   const variantNames = $derived(p?.variants && typeof p.variants === 'object' ? Object.keys(p.variants) : []);
   let pickedVariants = $state<Record<string, string>>({});
+  let pickedVariantDetails = $state<Record<string, any>>({});
+
+  function optLabel(opt: any) {
+    return typeof opt === 'string' ? opt : (opt?.label ?? opt?.name ?? opt?.value ?? '');
+  }
+  function optImage(opt: any) {
+    return typeof opt === 'object' ? (opt?.image ?? '') : '';
+  }
+  function pickVariant(name: string, opt: any) {
+    const label = optLabel(opt);
+    pickedVariants = { ...pickedVariants, [name]: label };
+    pickedVariantDetails = { ...pickedVariantDetails, [name]: { label, image: optImage(opt) || null } };
+    const image = optImage(opt);
+    if (image) {
+      const idx = images.findIndex((src: string) => src === image);
+      if (idx >= 0) activeImgIdx = idx;
+    }
+  }
 
   function variantText(): string | null {
     if (!variantNames.length) return null;
@@ -100,24 +118,25 @@
   );
 
   function addToCart() {
-    if (auth.user?.role === 'ADMIN') { toast.warn('Admin tidak bisa berbelanja'); return; }
-    if (!auth.user) { goto(loginHref($page.url.pathname + $page.url.search, 'cart')); return; }
+    if (auth.user?.role === 'ADMIN') { toast.warn('Admin tidak bisa berbelanja'); return false; }
+    if (!auth.user) { goto(loginHref($page.url.pathname + $page.url.search, 'cart')); return false; }
     if (variantNames.length && !allVariantsPicked()) {
       toast.warn('Pilih ' + variantNames.join(' & ') + ' dulu');
-      return;
+      return false;
     }
     cart.add({
+      cart_key: `${p.id}:${variantText() || ''}`,
       product_id: p.id, product_slug: p.slug, name: p.name, image: p.image, price: p.price,
       stock: p.stock, vendor_id: v.id, vendor_name: v.name, vendor_username: v.username,
-      variant_selection: variantText(), qty
+      variant_selection: variantText(), variant_details: pickedVariantDetails, qty
     });
     toast.success('Ditambahkan ke keranjang');
+    return true;
   }
   function buyNow() {
     if (auth.user?.role === 'ADMIN') { toast.warn('Admin tidak bisa berbelanja'); return; }
     if (!auth.user) { goto(loginHref($page.url.pathname + $page.url.search, 'buy')); return; }
-    addToCart();
-    goto('/checkout');
+    if (addToCart()) goto('/checkout');
   }
   async function toggleWish() {
     if (!auth.user) { goto(loginHref($page.url.pathname + $page.url.search, 'wishlist')); return; }
@@ -225,12 +244,19 @@
               <div class="text-sm font-medium mb-2">{vname}</div>
               <div class="flex flex-wrap gap-2">
                 {#each p.variants[vname] as opt}
-                  <button type="button" on:click={() => pickedVariants = { ...pickedVariants, [vname]: opt }}
-                          class="px-3 py-1.5 rounded-full text-xs font-medium border transition
-                                 {pickedVariants[vname] === opt
-                                    ? 'bg-app-primary text-app-pfg border-app-primary'
+                  {@const label = optLabel(opt)}
+                  {@const image = optImage(opt)}
+                  <button type="button" on:click={() => pickVariant(vname, opt)}
+                          class="{image ? 'w-[86px] min-h-[104px] rounded-2xl p-2' : 'px-3 py-1.5 rounded-full'} text-xs font-medium border transition
+                                 {pickedVariants[vname] === label
+                                    ? 'bg-blue-50 text-blue-700 border-blue-500 ring-1 ring-blue-500'
                                     : 'bg-white text-ink-700 border-ink-200 hover:border-ink-950'}">
-                    {opt}
+                    {#if image}
+                      <img src={image} alt="" class="mx-auto mb-1 h-14 w-14 rounded-lg object-cover" />
+                      <span class="block truncate">{label}</span>
+                    {:else}
+                      {label}
+                    {/if}
                   </button>
                 {/each}
               </div>
@@ -307,6 +333,14 @@
             <div class="text-xs font-semibold">100% Original</div>
             <div class="text-[11px] text-ink-500">Garansi 7 hari</div>
           </div>
+        </div>
+      </div>
+
+      <div class="rounded-xl bg-ink-50 p-3 text-sm">
+        <div class="text-xs font-semibold text-ink-500 mb-1">Spesifikasi</div>
+        <div class="flex justify-between gap-3">
+          <span class="text-ink-600">Berat</span>
+          <b>{p.weight >= 1000 ? `${(p.weight / 1000).toLocaleString('id-ID')} kg` : `${p.weight} gram`}</b>
         </div>
       </div>
     </div>
