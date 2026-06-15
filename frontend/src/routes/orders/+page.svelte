@@ -9,7 +9,7 @@
     { v:'IN_TRANSIT',        l:'Dalam Perjalanan' },
     { v:'ARRIVED',           l:'Telah Sampai' },
     { v:'DONE',              l:'Selesai' },
-    { v:'RETURN_REQUESTED',  l:'Diklaim' },
+    { v:'RETURN_REQUESTED',  l:'Pengembalian' },
     { v:'CANCELLED',         l:'Dibatalkan' }
   ];
 </script>

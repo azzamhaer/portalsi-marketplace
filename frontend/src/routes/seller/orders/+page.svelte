@@ -8,11 +8,15 @@
 
   let items = $state<any[]>([]);
   let loading = $state(true);
+  let search = $state('');
+  let searchTimer: any;
 
   async function load() {
     loading = true;
     try {
-      const r: any = await apiEndpoints.sellerOrders();
+      const params = new URLSearchParams();
+      if (search.trim()) params.set('search', search.trim());
+      const r: any = await apiEndpoints.sellerOrders(params.toString());
       items = r.data ?? [];
     } catch (e: any) {
       toast.error(e.message || 'Gagal memuat pesanan');
@@ -22,6 +26,11 @@
   }
 
   onMount(load);
+
+  function onSearchInput() {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(load, 300);
+  }
 
   function addressText(address: any) {
     if (!address) return '-';
@@ -43,8 +52,9 @@
     if (status === 'PAID') return 'Pembayaran sudah diterima. Klik Proses untuk menyiapkan pesanan.';
     if (status === 'PROCESSING') return 'Pembayaran sudah diterima. Pesanan siap dikirim.';
     if (status === 'IN_TRANSIT') return 'Pesanan dalam perjalanan. Tandai telah sampai jika barang sudah diterima di tujuan.';
-    if (status === 'ARRIVED') return 'Pesanan telah sampai. Menunggu buyer konfirmasi diterima atau mengajukan komplain.';
+    if (status === 'ARRIVED') return 'Pesanan telah sampai. Jika buyer tidak konfirmasi diterima atau mengajukan pengembalian, saldo otomatis masuk setelah 7 hari.';
     if (status === 'DONE') return 'Pesanan selesai. Dana pesanan ini sudah masuk saldo yang bisa ditarik.';
+    if (status === 'RETURN_REQUESTED') return 'Buyer mengajukan pengembalian. Dana ditahan sampai admin meninjau.';
     if (status === 'PENDING_PAYMENT') return 'Menunggu pembayaran buyer. Jangan kirim barang dulu.';
     return ORDER_STATUS_LABEL[status] ?? status;
   }
@@ -105,6 +115,15 @@
   <div class="grid lg:grid-cols-[230px_1fr] gap-6">
     <SellerSidebar />
     <div class="space-y-5">
+      <div class="card !p-3">
+        <div class="flex items-center gap-2 rounded-2xl bg-ink-50 px-3">
+          <Icon name="search" size={14} class="text-ink-400" />
+          <input bind:value={search} on:input={onSearchInput} class="flex-1 bg-transparent py-2 text-sm outline-none" placeholder="Cari pesanan, buyer, produk, resi" />
+          {#if search}
+            <button type="button" on:click={() => { search = ''; load(); }} class="text-ink-400 hover:text-ink-700"><Icon name="x" size={14} /></button>
+          {/if}
+        </div>
+      </div>
       {#if loading}
         <div class="card text-center text-ink-500 py-12">Memuat...</div>
       {:else if items.length === 0}
@@ -157,7 +176,36 @@
                 </div>
               </div>
 
-              <div class="grid gap-4 py-4 md:grid-cols-3">
+              {#if order?.notes}
+                <div class="mt-4 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  <b>Catatan buyer:</b> {order.notes}
+                </div>
+              {/if}
+
+              <details class="mt-4 md:hidden">
+                <summary class="cursor-pointer rounded-xl bg-ink-50 px-3 py-2 text-sm font-medium">Detail buyer, alamat, dan pengiriman</summary>
+                <div class="grid gap-4 py-4">
+                  <section>
+                    <div class="mb-1 text-xs font-semibold uppercase tracking-wider text-ink-400">Akun pembeli</div>
+                    <div class="text-sm font-semibold">{buyer?.name ?? address?.recipient ?? '-'}</div>
+                    <div class="mt-1 text-xs text-ink-500">{buyer?.email ?? '-'}</div>
+                    <div class="text-xs text-ink-500">{buyer?.phone || address?.phone || '-'}</div>
+                  </section>
+                  <section>
+                    <div class="mb-1 text-xs font-semibold uppercase tracking-wider text-ink-400">Alamat pengiriman</div>
+                    <div class="text-sm font-semibold">{address?.recipient ?? '-'}</div>
+                    <div class="mt-1 text-xs leading-relaxed text-ink-600">{addressText(address)}</div>
+                  </section>
+                  <section>
+                    <div class="mb-1 text-xs font-semibold uppercase tracking-wider text-ink-400">Pembayaran & ekspedisi</div>
+                    <div class="text-sm">{order?.payment?.method_name ?? '-'}</div>
+                    <div class="mt-1 text-xs text-ink-500">Payment: {order?.payment?.status ?? '-'}</div>
+                    <div class="text-xs text-ink-500">{order?.courier_name ?? '-'} {order?.courier_service ? `- ${order.courier_service}` : ''}</div>
+                  </section>
+                </div>
+              </details>
+
+              <div class="hidden gap-4 py-4 md:grid md:grid-cols-3">
                 <section>
                   <div class="mb-1 text-xs font-semibold uppercase tracking-wider text-ink-400">Akun pembeli</div>
                   <div class="text-sm font-semibold">{buyer?.name ?? address?.recipient ?? '-'}</div>

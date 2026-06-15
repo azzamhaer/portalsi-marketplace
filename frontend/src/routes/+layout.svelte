@@ -18,6 +18,8 @@
   const PUBLIC_PATHS = ['/login', '/register', '/forgot-password', '/reset-password', '/verify-email', '/confirm-email'];
   const isExempt = $derived(PUBLIC_PATHS.some((p) => $page.url.pathname === p || $page.url.pathname.startsWith(p + '/')));
   const needsVerify = $derived(!!auth.user && !auth.user.email_verified_at && !isExempt);
+  const siteName = $derived(settings.appName ?? 'MPSI Marketplace');
+  const defaultDescription = 'Marketplace MPSI untuk belanja produk lokal, elektronik, kebutuhan harian, dan toko terpercaya dengan pembayaran aman.';
 
   // Apply server-loaded settings IMMEDIATELY (no flash)
   if (data?.settings) settings.setAll(data.settings);
@@ -63,7 +65,16 @@
 </script>
 
 <svelte:head>
-  <title>{settings.appName ?? 'MPSI'}</title>
+  <title>{siteName}</title>
+  <meta name="description" content={defaultDescription} />
+  <meta name="robots" content="index,follow" />
+  <link rel="canonical" href={$page.url.href} />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content={siteName} />
+  <meta property="og:title" content={siteName} />
+  <meta property="og:description" content={defaultDescription} />
+  <meta property="og:url" content={$page.url.href} />
+  <meta name="twitter:card" content="summary" />
   <link rel="icon" type="image/svg+xml" href={faviconHref} />
   <link rel="apple-touch-icon" href={faviconHref} />
   <meta name="theme-color" content={settings.primary || '#0a0a0a'} />

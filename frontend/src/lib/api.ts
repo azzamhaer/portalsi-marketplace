@@ -112,7 +112,7 @@ export const apiEndpoints = {
   sellerCreateProduct: (b: any)=> api('/seller/products', { method: 'POST', body: b }),
   sellerUpdateProduct: (id: number, b: any) => api(`/seller/products/${id}`, { method: 'PUT', body: b }),
   sellerDeleteProduct: (id: number) => api(`/seller/products/${id}`, { method: 'DELETE' }),
-  sellerOrders:     ()         => api('/seller/orders'),
+  sellerOrders:     (q='')     => api('/seller/orders' + (q ? '?' + q : '')),
   sellerProcessOrder:(id: number) => api(`/seller/orders/${id}/process`, { method: 'POST' }),
   sellerShipOrder:  (id: number) => api(`/seller/orders/${id}/ship`, { method: 'POST' }),
   sellerArriveOrder:(id: number) => api(`/seller/orders/${id}/arrive`, { method: 'POST' }),

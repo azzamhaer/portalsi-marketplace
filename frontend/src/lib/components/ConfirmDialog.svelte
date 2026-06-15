@@ -4,7 +4,7 @@
 </script>
 
 {#if confirmDialog.open}
-  <div class="fixed inset-0 z-[90] grid place-items-center bg-black/55 p-4 backdrop-blur-sm animate-fadeIn" role="dialog" aria-modal="true">
+  <div class="fixed inset-0 z-[3000] grid place-items-center bg-black/55 p-4 backdrop-blur-sm animate-fadeIn" role="dialog" aria-modal="true">
     <div class="w-full max-w-sm rounded-[28px] border border-white/70 bg-white/90 p-5 shadow-[0_24px_80px_rgba(0,0,0,0.28)] backdrop-blur-2xl">
       <div class="mb-4 flex items-start gap-3">
         <div class="grid h-11 w-11 shrink-0 place-items-center rounded-2xl {confirmDialog.tone === 'danger' ? 'bg-red-100 text-red-700' : 'bg-ink-100 text-ink-950'}">

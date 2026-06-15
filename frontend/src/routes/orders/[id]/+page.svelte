@@ -43,7 +43,7 @@
     catch (e: any) { toast.error(e.message); } finally { busy = false; }
   }
   async function markDone() {
-    const ok = await confirmDialog.ask({ title: 'Pesanan sudah diterima?', message: 'Status pesanan akan berubah menjadi selesai.', confirmText: 'Sudah diterima' });
+    const ok = await confirmDialog.ask({ title: 'Tandai pesanan diterima?', message: 'Setelah pesanan ditandai diterima, dana seller akan dilepas dan Anda tidak bisa mengajukan refund/pengembalian lagi.', confirmText: 'Sudah diterima' });
     if (!ok) return;
     busy = true;
     try { await apiEndpoints.markOrderDone(order.id); toast.success('Pesanan selesai'); await invalidateAll(); }
@@ -51,6 +51,13 @@
   }
   let returnReason = $state('');
   let showReturn = $state(false);
+  const returnTemplates = [
+    'Barang tidak sesuai pesanan',
+    'Barang rusak saat diterima',
+    'Barang kurang/komponen tidak lengkap',
+    'Paket tertukar',
+    'Pesanan ditandai sampai, tetapi barang belum diterima',
+  ];
   async function requestReturn() {
     if (!returnReason.trim()) { toast.warn('Tulis alasan'); return; }
     const ok = await confirmDialog.ask({ title: 'Laporkan pesanan belum diterima?', message: 'Admin akan meninjau laporan ini. Jika disetujui, dana akan dikembalikan ke saldo profil Anda.', confirmText: 'Kirim laporan' });
@@ -159,7 +166,7 @@
             </div>
           {:else if order.status === 'RETURN_REQUESTED'}
             <div class="rounded-2xl bg-amber-50 border border-amber-100 p-3 text-sm text-amber-800">
-              Laporan belum diterima sedang ditinjau admin. Refund akan masuk ke saldo profil jika laporan disetujui.
+              Pengajuan pengembalian sedang ditinjau admin. Refund akan masuk ke saldo profil jika disetujui.
             </div>
           {:else if order.status === 'REFUNDED'}
             <div class="rounded-2xl bg-blue-50 border border-blue-100 p-3 text-sm text-blue-800">
@@ -171,7 +178,12 @@
 
       {#if showReturn && order.status === 'ARRIVED'}
         <div class="card border-red-100 bg-red-50/40">
-          <h3 class="font-semibold mb-3">Laporkan Pesanan Belum Diterima</h3>
+          <h3 class="font-semibold mb-3">Ajukan Pengembalian</h3>
+          <div class="mb-3 flex flex-wrap gap-2">
+            {#each returnTemplates as t}
+              <button type="button" on:click={() => returnReason = t} class="rounded-full border border-red-100 bg-white px-3 py-1.5 text-xs text-red-700 hover:bg-red-50">{t}</button>
+            {/each}
+          </div>
           <textarea bind:value={returnReason} class="input mb-3" rows={3} placeholder="Tuliskan kronologi singkat, misalnya tracking sudah sampai tetapi barang belum diterima"></textarea>
           <div class="flex gap-2">
             <button on:click={requestReturn} disabled={busy} class="btn-primary btn-md">Kirim ke Admin</button>
@@ -189,17 +201,8 @@
       {/if}
 
       {#if order.status === 'DONE'}
-        <div class="card">
-          {#if !showReturn}
-            <button on:click={() => showReturn = true} class="btn-outline btn-md"><Icon name="undo-2" size={14} /> Ajukan Pengembalian</button>
-          {:else}
-            <h3 class="font-semibold mb-3">Ajukan Pengembalian</h3>
-            <textarea bind:value={returnReason} class="input mb-3" rows={3} placeholder="Tuliskan alasan pengembalian"></textarea>
-            <div class="flex gap-2">
-              <button on:click={requestReturn} disabled={busy} class="btn-primary btn-md">Kirim Permintaan</button>
-              <button on:click={() => showReturn = false} class="btn-outline btn-md">Batal</button>
-            </div>
-          {/if}
+        <div class="card rounded-2xl bg-emerald-50 border-emerald-100 text-sm text-emerald-800">
+          Pesanan sudah selesai. Dana seller telah dilepas dan pengajuan refund tidak lagi tersedia.
         </div>
       {/if}
 

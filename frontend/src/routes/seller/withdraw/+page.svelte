@@ -68,7 +68,7 @@
           <div class="card">
             <div class="text-xs uppercase tracking-widest text-ink-500">Pendapatan Kotor</div>
             <div class="font-display text-xl font-bold tracking-tightest mt-2">{fmtRp(data.gross_earning)}</div>
-            <div class="text-xs text-ink-500 mt-1">Dari pesanan selesai</div>
+            <div class="text-xs text-ink-500 mt-1">Dari pesanan selesai atau otomatis cair setelah 7 hari sejak sampai</div>
           </div>
           <div class="card">
             <div class="text-xs uppercase tracking-widest text-ink-500">Komisi Platform ({data.commission_percent}%)</div>
@@ -85,6 +85,9 @@
         <!-- Form withdraw -->
         <div class="card">
           <h3 class="font-semibold mb-4 flex items-center gap-2"><Icon name="wallet" size={18} /> Ajukan Penarikan</h3>
+          <div class="mb-4 rounded-xl bg-blue-50 px-3 py-2 text-xs text-blue-800">
+            Jika buyer tidak menandai pesanan diterima dan tidak mengajukan pengembalian, saldo otomatis masuk setelah 7 hari dari status Telah Sampai, dipotong komisi platform sesuai pengaturan admin.
+          </div>
           {#if !data.bank.name || !data.bank.account || !data.bank.holder}
             <div class="bg-amber-50 text-amber-800 text-sm p-3 rounded-xl mb-4">
               Lengkapi data bank Anda dulu di <a href="/seller/profile" class="underline font-semibold">Profil Toko</a>.

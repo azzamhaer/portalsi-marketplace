@@ -19,12 +19,18 @@
   const inWishlist = $derived(wishlist.has(p.id));
   const isAdmin = $derived(auth.user?.role === 'ADMIN');
   const isOutOfStock = $derived((p.stock ?? 0) <= 0);
+  const productUrl = $derived($page.url.origin + $page.url.pathname);
+  const seoDescription = $derived(String(p.description || `${p.name} dari ${v.name}`).replace(/\s+/g, ' ').slice(0, 155));
+  const shareText = $derived(`${p.name} - ${fmtRp(p.price)} di MPSI`);
 
   // Gallery state
   const images = $derived.by(() => {
     const arr = Array.isArray(p?.images) ? p.images.filter((x: any) => typeof x === 'string' && x) : [];
     return arr.length ? arr : [p?.image].filter(Boolean);
   });
+  const seoImage = $derived(String(images[0] || '').startsWith('http') || String(images[0] || '').startsWith('data:')
+    ? images[0]
+    : `${$page.url.origin}${images[0] || p.image || ''}`);
   let activeImgIdx = $state(0);
   let zoomOpen = $state(false);
 
@@ -166,9 +172,37 @@
     } catch (e: any) { toast.error(e.message); }
     finally { sendingChat = false; }
   }
+  async function shareProduct(kind: 'native' | 'copy' | 'whatsapp') {
+    if (kind === 'whatsapp') {
+      window.open(`https://wa.me/?text=${encodeURIComponent(`${shareText}\n${productUrl}`)}`, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    if (kind === 'native' && navigator.share) {
+      try { await navigator.share({ title: p.name, text: shareText, url: productUrl }); return; }
+      catch {}
+    }
+    await navigator.clipboard.writeText(productUrl);
+    toast.success('Link produk disalin');
+  }
 </script>
 
-<svelte:head><title>{p.name}</title></svelte:head>
+<svelte:head>
+  <title>{p.name} - {fmtRp(p.price)} | MPSI</title>
+  <meta name="description" content={seoDescription} />
+  <link rel="canonical" href={productUrl} />
+  <meta property="og:type" content="product" />
+  <meta property="og:site_name" content="MPSI Marketplace" />
+  <meta property="og:title" content={`${p.name} - ${fmtRp(p.price)}`} />
+  <meta property="og:description" content={seoDescription} />
+  <meta property="og:url" content={productUrl} />
+  <meta property="og:image" content={seoImage} />
+  <meta property="product:price:amount" content={String(p.price)} />
+  <meta property="product:price:currency" content="IDR" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content={`${p.name} - ${fmtRp(p.price)}`} />
+  <meta name="twitter:description" content={seoDescription} />
+  <meta name="twitter:image" content={seoImage} />
+</svelte:head>
 
 <div class="container-x py-4 sm:py-6 md:py-10">
   <nav class="flex items-center gap-1 text-xs text-ink-500 mb-4 overflow-hidden whitespace-nowrap">
@@ -220,6 +254,11 @@
             {/each}
           </div>
         {/if}
+        <div class="mt-4 flex flex-wrap gap-2">
+          <button type="button" on:click={() => shareProduct('native')} class="btn-outline btn-sm"><Icon name="share-2" size={13} /> Share</button>
+          <button type="button" on:click={() => shareProduct('whatsapp')} class="btn-outline btn-sm"><Icon name="message-circle" size={13} /> WhatsApp</button>
+          <button type="button" on:click={() => shareProduct('copy')} class="btn-outline btn-sm"><Icon name="link" size={13} /> Salin link</button>
+        </div>
       </div>
 
       <div class="border-t border-b border-ink-100 py-5">

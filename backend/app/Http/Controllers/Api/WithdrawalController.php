@@ -31,7 +31,7 @@ class WithdrawalController extends Controller
         $commissionPct = (float) (Setting::get('commission_percent', 5));
 
         $grossEarning = (int) OrderItem::where('vendor_id', $vendor->id)
-            ->whereHas('order', fn($q) => $q->where('status', 'DONE'))
+            ->whereHas('order', fn($q) => $this->sellerBalanceOrderScope($q))
             ->sum(DB::raw('price * quantity'));
 
         $commission  = (int) round($grossEarning * $commissionPct / 100);
@@ -71,7 +71,7 @@ class WithdrawalController extends Controller
 
         $commissionPct = (float) (Setting::get('commission_percent', 5));
         $grossEarning = (int) OrderItem::where('vendor_id', $vendor->id)
-            ->whereHas('order', fn($q) => $q->where('status', 'DONE'))
+            ->whereHas('order', fn($q) => $this->sellerBalanceOrderScope($q))
             ->sum(DB::raw('price * quantity'));
         $netEarning = $grossEarning - (int) round($grossEarning * $commissionPct / 100);
 
@@ -221,5 +221,17 @@ class WithdrawalController extends Controller
             'bank_holder' => $data['bank_holder'],
             'status' => 'PENDING',
         ]), 201);
+    }
+
+    private function sellerBalanceOrderScope($q)
+    {
+        $cutoff = now()->subDays(7)->toDateTimeString();
+        return $q->where(function ($qq) use ($cutoff) {
+            $qq->where('status', 'DONE')
+                ->orWhere(function ($auto) use ($cutoff) {
+                    $auto->where('status', 'ARRIVED')
+                        ->whereRaw("JSON_UNQUOTE(JSON_EXTRACT(shipping_payload, '$.arrived_at')) <= ?", [$cutoff]);
+                });
+        });
     }
 }

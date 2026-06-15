@@ -271,7 +271,18 @@ class SellerController extends Controller
     public function orders(Request $request)
     {
         $vendor = $this->requireApprovedVendor($request);
+        $search = trim((string) $request->query('search'));
         $page = OrderItem::where('vendor_id', $vendor->id)
+            ->when($search, function ($q) use ($search) {
+                $q->where(function ($qq) use ($search) {
+                    $qq->where('product_name', 'like', "%{$search}%")
+                        ->orWhereHas('order', function ($order) use ($search) {
+                            $order->where('order_number', 'like', "%{$search}%")
+                                ->orWhere('tracking_no', 'like', "%{$search}%")
+                                ->orWhereHas('user', fn($u) => $u->where('name', 'like', "%{$search}%")->orWhere('email', 'like', "%{$search}%")->orWhere('phone', 'like', "%{$search}%"));
+                        });
+                });
+            })
             ->with([
                 'product:id,name,slug,image',
                 'order.user:id,name,email,phone',

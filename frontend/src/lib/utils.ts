@@ -13,7 +13,7 @@ export const ORDER_STATUS_LABEL: Record<string,string> = {
   ARRIVED: 'Telah Sampai',
   SHIPPED: 'Sedang Dikirim',
   DONE: 'Selesai',
-  RETURN_REQUESTED: 'Komplain Diajukan',
+  RETURN_REQUESTED: 'Pengembalian Diajukan',
   REFUNDED: 'Direfund',
   CANCELLED: 'Dibatalkan',
   EXPIRED: 'Kadaluarsa'

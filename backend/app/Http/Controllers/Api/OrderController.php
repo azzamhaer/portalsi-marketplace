@@ -663,11 +663,11 @@ class OrderController extends Controller
     public function requestReturn(Request $request, $id)
     {
         $order = Order::where('user_id', $request->user()->id)->findOrFail($id);
-        if (!in_array($order->status, ['ARRIVED', 'DONE'])) {
-            return response()->json(['message' => 'Pengajuan hanya tersedia setelah seller menandai pesanan telah sampai.'], 422);
+        if ($order->status !== 'ARRIVED') {
+            return response()->json(['message' => 'Pengajuan pengembalian hanya tersedia sebelum Anda menandai pesanan diterima.'], 422);
         }
-        if (\App\Models\OrderReturn::where('order_id', $order->id)->whereIn('status', ['PENDING', 'APPROVED'])->exists()) {
-            return response()->json(['message' => 'Permintaan Anda sebelumnya masih menunggu proses admin.'], 422);
+        if (\App\Models\OrderReturn::where('order_id', $order->id)->exists()) {
+            return response()->json(['message' => 'Pengajuan pengembalian untuk pesanan ini hanya bisa dilakukan sekali.'], 422);
         }
         $data = $request->validate(['reason' => 'required|string|max:1000']);
         $r = \App\Models\OrderReturn::create([
@@ -675,7 +675,52 @@ class OrderController extends Controller
             'user_id' => $request->user()->id,
             'reason' => $data['reason'],
         ]);
-        if ($order->status === 'ARRIVED') $order->update(['status' => 'RETURN_REQUESTED']);
+        $order->update(['status' => 'RETURN_REQUESTED']);
+        $this->notifyReturnRequested($order->fresh('items'), $r, $request->user());
         return response()->json($r);
+    }
+
+    private function notifyReturnRequested(Order $order, \App\Models\OrderReturn $return, $user): void
+    {
+        $admins = \App\Models\User::where('role', 'ADMIN')->pluck('id');
+        foreach ($admins as $adminId) {
+            \App\Models\UserNotification::send(
+                $adminId,
+                'RETURN_REQUESTED',
+                'Pengajuan pengembalian baru',
+                "Buyer {$user->name} mengajukan pengembalian untuk pesanan #{$order->order_number}.",
+                '/admin/returns',
+                'WARNING',
+                ['order_id' => $order->id, 'return_id' => $return->id]
+            );
+        }
+
+        $vendorIds = $order->items->pluck('vendor_id')->unique()->filter();
+        $vendors = \App\Models\Vendor::whereIn('id', $vendorIds)->get();
+        foreach ($vendors as $vendor) {
+            if (!$vendor->user_id) continue;
+            $item = $order->items->firstWhere('vendor_id', $vendor->id);
+            $thread = \App\Models\ChatThread::firstOrCreate(
+                ['user_id' => $user->id, 'vendor_id' => $vendor->id],
+                ['product_id' => $item?->product_id, 'last_message_at' => null]
+            );
+            \App\Models\ChatMessage::create([
+                'thread_id' => $thread->id,
+                'sender_user_id' => $user->id,
+                'sender_type' => 'BUYER',
+                'message' => "Pengajuan pengembalian untuk pesanan #{$order->order_number}: {$return->reason}",
+            ]);
+            $thread->update(['last_message_at' => now()]);
+
+            \App\Models\UserNotification::send(
+                $vendor->user_id,
+                'SELLER_RETURN_REQUESTED',
+                'Buyer mengajukan pengembalian',
+                "Pesanan #{$order->order_number} diajukan pengembalian. Dana ditahan sampai admin meninjau.",
+                '/seller/orders',
+                'WARNING',
+                ['order_id' => $order->id, 'return_id' => $return->id, 'vendor_id' => $vendor->id]
+            );
+        }
     }
 }
