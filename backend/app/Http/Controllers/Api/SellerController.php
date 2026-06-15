@@ -10,6 +10,7 @@ use App\Models\SellerVoucher;
 use App\Models\Tag;
 use App\Models\Vendor;
 use App\Services\RajaOngkirService;
+use App\Services\ProductStockNotificationService;
 use App\Support\ReservedUsernames;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -18,6 +19,8 @@ use Illuminate\Validation\ValidationException;
 
 class SellerController extends Controller
 {
+    public function __construct(private ProductStockNotificationService $stockNotifications) {}
+
     public function register(Request $request)
     {
         $user = $request->user();
@@ -243,7 +246,11 @@ class SellerController extends Controller
         if (array_key_exists('variants', $data)) {
             $data['variants'] = $this->normalizeVariants($data['variants']);
         }
+        $oldStock = (int) $product->stock;
         $product->update($data);
+        if (array_key_exists('stock', $data) && $oldStock <= 0 && (int) $product->stock > 0) {
+            $this->stockNotifications->notifyWishlistRestocked($product);
+        }
         if ($tags !== null) $this->syncTags($product, $tags);
         return response()->json($product->load('tagModels'));
     }
@@ -265,7 +272,12 @@ class SellerController extends Controller
         $vendor = $this->requireApprovedVendor($request);
         return response()->json(
             OrderItem::where('vendor_id', $vendor->id)
-                ->with(['order.user:id,name,email', 'order.address:id,recipient,city,phone', 'order.payment:id,order_id,method_name,status'])
+                ->with([
+                    'product:id,name,slug,image',
+                    'order.user:id,name,email,phone',
+                    'order.address',
+                    'order.payment:id,order_id,method_name,status,paid_at',
+                ])
                 ->orderByDesc('id')->paginate(30)
         );
     }
@@ -329,6 +341,10 @@ class SellerController extends Controller
             ->with(['user', 'address', 'items' => fn($q) => $q->where('vendor_id', $vendor->id)->with('product:id,weight')])
             ->findOrFail($id);
 
+        if ($order->status !== 'PROCESSING') {
+            return response()->json(['message' => 'Pesanan hanya bisa dikirim setelah pembayaran berhasil dan statusnya Diproses.'], 422);
+        }
+
         $tracking = $order->tracking_no ?: $this->makeTrackingNumber($order->courier_name ?? 'JNE');
         $rajaongkirOrderNo = $order->rajaongkir_order_no;
         $shippingPayload = $order->shipping_payload ?: [];
@@ -364,14 +380,16 @@ class SellerController extends Controller
             'shipping_payload' => $shippingPayload,
         ]);
 
-        // Email notif ke pembeli
+        // Notifikasi ke pembeli dibuat best-effort agar update status tidak gagal karena email gateway.
         if ($order->user) {
-            $brevo = new \App\Services\BrevoService();
-            $front = rtrim(config('services.frontend_url', 'http://localhost:5173'), '/');
-            $body = "<p>Hai <b>" . htmlspecialchars($order->user->name) . "</b>,</p>
-                     <p>Pesanan <b>{$order->order_number}</b> sudah dikirim dengan nomor resi <b>{$tracking}</b>.</p>";
-            $brevo->send($order->user->email, $order->user->name, "Pesanan Dikirim #{$order->order_number}",
-                $brevo->layout('Pesanan Dikirim', $body, $front . '/orders/' . $order->id, 'Cek Detail Pesanan')
+            \App\Models\UserNotification::send(
+                $order->user->id,
+                'ORDER_SHIPPED',
+                'Pesanan dikirim',
+                "Pesanan #{$order->order_number} sudah dikirim dengan nomor resi {$tracking}.",
+                '/orders/' . $order->id,
+                'INFO',
+                ['order_id' => $order->id, 'order_number' => $order->order_number, 'tracking_no' => $tracking]
             );
         }
 

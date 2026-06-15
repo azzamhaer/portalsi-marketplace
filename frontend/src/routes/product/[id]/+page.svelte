@@ -18,6 +18,7 @@
   let qty = $state(1);
   const inWishlist = $derived(wishlist.has(p.id));
   const isAdmin = $derived(auth.user?.role === 'ADMIN');
+  const isOutOfStock = $derived((p.stock ?? 0) <= 0);
 
   // Gallery state
   const images = $derived.by(() => {
@@ -120,16 +121,24 @@
   function addToCart() {
     if (auth.user?.role === 'ADMIN') { toast.warn('Admin tidak bisa berbelanja'); return false; }
     if (!auth.user) { goto(loginHref($page.url.pathname + $page.url.search, 'cart')); return false; }
+    if (isOutOfStock) {
+      toast.warn('Stok habis. Masukkan ke wishlist untuk diberi notifikasi ketika stok tersedia kembali.');
+      return false;
+    }
     if (variantNames.length && !allVariantsPicked()) {
       toast.warn('Pilih ' + variantNames.join(' & ') + ' dulu');
       return false;
     }
-    cart.add({
+    const added = cart.add({
       cart_key: `${p.id}:${variantText() || ''}`,
       product_id: p.id, product_slug: p.slug, name: p.name, image: p.image, price: p.price,
       stock: p.stock, vendor_id: v.id, vendor_name: v.name, vendor_username: v.username,
       variant_selection: variantText(), variant_details: pickedVariantDetails, qty
     });
+    if (!added) {
+      toast.warn('Stok habis. Masukkan ke wishlist untuk diberi notifikasi ketika stok tersedia kembali.');
+      return false;
+    }
     toast.success('Ditambahkan ke keranjang');
     return true;
   }
@@ -221,6 +230,11 @@
             <span class="pill-ink !bg-app-primary !text-app-pfg">Hemat {disc}%</span>
           {/if}
         </div>
+        {#if isOutOfStock}
+          <div class="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">
+            <b>Stok habis.</b> Silahkan masukkan ke wishlist untuk diberikan notifikasi ketika stok ada kembali.
+          </div>
+        {/if}
       </div>
 
       <a href={v.username ? `/${v.username}` : `/vendors/${v.id}`} class="flex items-center gap-3 p-3 sm:p-4 rounded-2xl bg-ink-50 hover:bg-ink-100 transition-colors">
@@ -268,11 +282,11 @@
       <div class="flex items-center gap-3 sm:gap-4">
         <span class="text-sm text-ink-700 w-16 sm:w-20">Jumlah</span>
         <div class="inline-flex items-center border border-ink-200 rounded-full">
-          <button on:click={() => qty = Math.max(1, qty-1)} class="w-9 h-9 grid place-items-center hover:bg-ink-50 rounded-l-full"><Icon name="minus" size={14} /></button>
-          <input type="number" bind:value={qty} min="1" max={p.stock} class="w-12 text-center bg-transparent text-sm outline-none" />
-          <button on:click={() => qty = Math.min(p.stock, qty+1)} class="w-9 h-9 grid place-items-center hover:bg-ink-50 rounded-r-full"><Icon name="plus" size={14} /></button>
+          <button on:click={() => qty = Math.max(1, qty-1)} disabled={isOutOfStock} class="w-9 h-9 grid place-items-center hover:bg-ink-50 rounded-l-full disabled:opacity-40"><Icon name="minus" size={14} /></button>
+          <input type="number" bind:value={qty} min="1" max={p.stock} disabled={isOutOfStock} class="w-12 text-center bg-transparent text-sm outline-none disabled:opacity-40" />
+          <button on:click={() => qty = Math.min(p.stock, qty+1)} disabled={isOutOfStock} class="w-9 h-9 grid place-items-center hover:bg-ink-50 rounded-r-full disabled:opacity-40"><Icon name="plus" size={14} /></button>
         </div>
-        <span class="text-xs text-ink-500">Stok <b class="text-ink-700">{p.stock}</b></span>
+        <span class="text-xs {isOutOfStock ? 'text-red-600' : 'text-ink-500'}">Stok <b class={isOutOfStock ? 'text-red-700' : 'text-ink-700'}>{p.stock}</b></span>
       </div>
 
       <!-- Action buttons -->
@@ -285,20 +299,20 @@
 
       <div class="flex gap-2 sm:gap-3">
         <!-- Tambah keranjang -->
-        <button on:click={addToCart} disabled={isAdmin}
+        <button on:click={addToCart} disabled={isAdmin || isOutOfStock}
                 class="rounded-full transition inline-flex items-center justify-center border border-ink-300
                        h-11 w-11 sm:h-auto sm:w-auto sm:px-5 sm:py-3 sm:gap-2 sm:flex-1 shrink-0
-                       {isAdmin ? 'opacity-40 cursor-not-allowed' : 'hover:bg-ink-50'}"
+                       {isAdmin || isOutOfStock ? 'opacity-40 cursor-not-allowed' : 'hover:bg-ink-50'}"
                 aria-label="Tambah ke keranjang">
           <Icon name="shopping-bag" size={18} />
           <span class="hidden sm:inline text-sm font-medium">Keranjang</span>
         </button>
         <!-- Beli sekarang -->
-        <button on:click={buyNow} disabled={isAdmin}
+        <button on:click={buyNow} disabled={isAdmin || isOutOfStock}
                 class="btn-primary rounded-full inline-flex items-center justify-center gap-2 h-11 sm:h-auto sm:py-3 flex-1 text-sm font-medium px-4
-                       {isAdmin ? 'opacity-40 cursor-not-allowed' : ''}">
+                       {isAdmin || isOutOfStock ? 'opacity-40 cursor-not-allowed' : ''}">
           <Icon name="zap" size={16} />
-          <span>Beli Sekarang</span>
+          <span>{isOutOfStock ? 'Stok Habis' : 'Beli Sekarang'}</span>
         </button>
         <!-- Wishlist -->
         <button on:click={toggleWish} disabled={isAdmin}

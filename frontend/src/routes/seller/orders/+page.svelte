@@ -11,57 +11,156 @@
 
   async function load() {
     loading = true;
-    try { const r: any = await apiEndpoints.sellerOrders(); items = r.data ?? []; }
-    finally { loading = false; }
+    try {
+      const r: any = await apiEndpoints.sellerOrders();
+      items = r.data ?? [];
+    } catch (e: any) {
+      toast.error(e.message || 'Gagal memuat pesanan');
+    } finally {
+      loading = false;
+    }
   }
+
   onMount(load);
 
+  function addressText(address: any) {
+    if (!address) return '-';
+    return [
+      address.full_address,
+      address.village,
+      address.district,
+      address.city,
+      address.province,
+      address.postal_code,
+    ].filter(Boolean).join(', ');
+  }
+
+  function productHref(it: any) {
+    return `/product/${it.product?.slug || it.product_id}`;
+  }
+
+  function statusNote(status: string) {
+    if (status === 'PROCESSING') return 'Pembayaran sudah diterima. Pesanan siap dikirim.';
+    if (status === 'SHIPPED') return 'Pesanan sedang dikirim. Menunggu konfirmasi diterima dari pembeli.';
+    if (status === 'DONE') return 'Pesanan selesai. Dana pesanan ini sudah masuk saldo yang bisa ditarik.';
+    if (status === 'PENDING_PAYMENT') return 'Menunggu pembayaran buyer. Jangan kirim barang dulu.';
+    return ORDER_STATUS_LABEL[status] ?? status;
+  }
+
   async function ship(id: number) {
-    const ok = await confirmDialog.ask({ title: 'Kirim pesanan?', message: 'Sistem akan membuat nomor resi dan mengubah status menjadi dikirim.', confirmText: 'Kirim' });
+    const ok = await confirmDialog.ask({
+      title: 'Kirim pesanan?',
+      message: 'Status akan berubah dari Diproses ke Dikirim. Setelah itu pesanan hanya bisa selesai saat buyer konfirmasi diterima.',
+      confirmText: 'Kirim',
+    });
     if (!ok) return;
-    try { const r: any = await apiEndpoints.sellerShipOrder(id); toast.success('Resi: ' + r.tracking_no); load(); }
-    catch (e: any) { toast.error(e.message); }
+    try {
+      const r: any = await apiEndpoints.sellerShipOrder(id);
+      toast.success('Pesanan dikirim. Resi: ' + r.tracking_no);
+      load();
+    } catch (e: any) {
+      toast.error(e.message || 'Gagal mengubah status pesanan');
+    }
   }
 </script>
 
-<svelte:head><title>Pesanan Masuk — MPSI Seller</title></svelte:head>
+<svelte:head><title>Pesanan Masuk - MPSI Seller</title></svelte:head>
 
 <div class="container-x py-8">
   <h1 class="section-title mb-8">Pesanan Masuk</h1>
   <div class="grid lg:grid-cols-[230px_1fr] gap-6">
     <SellerSidebar />
     <div class="space-y-5">
-      {#if loading}<div class="card text-center text-ink-500 py-12">Memuat…</div>
+      {#if loading}
+        <div class="card text-center text-ink-500 py-12">Memuat...</div>
       {:else if items.length === 0}
         <div class="card text-center py-12 text-ink-500">
           <Icon name="package-open" size={48} class="mx-auto text-ink-300 mb-3" />
           <p>Belum ada pesanan.</p>
         </div>
       {:else}
-        <div class="card overflow-x-auto">
-          <table class="w-full text-sm">
-            <thead class="text-xs text-ink-500 border-b border-ink-100">
-              <tr><th class="text-left py-2 font-medium">Order</th><th class="text-left py-2 font-medium">Pembeli</th><th class="text-left py-2 font-medium">Produk</th><th class="text-left py-2 font-medium">Total</th><th class="text-left py-2 font-medium">Status</th><th class="text-left py-2 font-medium">Aksi</th></tr>
-            </thead>
-            <tbody>
-              {#each items as it (it.id)}
-                <tr class="border-b border-ink-100 last:border-0">
-                  <td class="py-2"><b class="font-mono text-xs">{it.order?.order_number}</b><div class="text-[11px] text-ink-500">{new Date(it.order?.created_at).toLocaleDateString('id-ID')}</div></td>
-                  <td class="py-2">{it.order?.address?.recipient}<div class="text-[11px] text-ink-500">{it.order?.address?.city}</div></td>
-                  <td class="py-2 max-w-xs"><div class="line-clamp-2">{it.product_name}</div><div class="text-[11px] text-ink-500">{it.quantity} pcs</div></td>
-                  <td class="py-2">{fmtRp(it.price * it.quantity)}</td>
-                  <td class="py-2"><span class="pill {statusPill(it.order?.status ?? '')}">{ORDER_STATUS_LABEL[it.order?.status] ?? it.order?.status}</span></td>
-                  <td class="py-2">
-                    {#if it.order?.status === 'PROCESSING'}
-                      <button on:click={() => ship(it.order.id)} class="btn-primary btn-sm"><Icon name="truck" size={12} /> Kirim</button>
-                    {:else}
-                      <a href={`/orders/${it.order?.id}`} class="text-xs text-ink-700 hover:text-ink-950">Lihat</a>
-                    {/if}
-                  </td>
-                </tr>
-              {/each}
-            </tbody>
-          </table>
+        <div class="space-y-4">
+          {#each items as it (it.id)}
+            {@const order = it.order}
+            {@const address = order?.address}
+            {@const buyer = order?.user}
+            {@const status = order?.status ?? ''}
+            <article class="card">
+              <div class="flex flex-wrap items-start justify-between gap-4 border-b border-ink-100 pb-4">
+                <div>
+                  <div class="flex flex-wrap items-center gap-2">
+                    <b class="font-mono text-sm">{order?.order_number}</b>
+                    <span class="pill {statusPill(status)}">{ORDER_STATUS_LABEL[status] ?? status}</span>
+                  </div>
+                  <div class="mt-1 text-xs text-ink-500">
+                    {order?.created_at ? new Date(order.created_at).toLocaleString('id-ID') : '-'}
+                  </div>
+                  <p class="mt-2 text-xs text-ink-600">{statusNote(status)}</p>
+                </div>
+
+                <div class="flex flex-wrap gap-2">
+                  {#if status === 'PROCESSING'}
+                    <button on:click={() => ship(order.id)} class="btn-primary btn-sm">
+                      <Icon name="truck" size={12} /> Kirim
+                    </button>
+                  {:else if status === 'SHIPPED'}
+                    <span class="rounded-full bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700">
+                      Menunggu buyer
+                    </span>
+                  {:else if status === 'DONE'}
+                    <a href="/seller/withdraw" class="btn-outline btn-sm">
+                      <Icon name="wallet" size={12} /> Tarik dana
+                    </a>
+                  {/if}
+                </div>
+              </div>
+
+              <div class="grid gap-4 py-4 md:grid-cols-3">
+                <section>
+                  <div class="mb-1 text-xs font-semibold uppercase tracking-wider text-ink-400">Akun pembeli</div>
+                  <div class="text-sm font-semibold">{buyer?.name ?? address?.recipient ?? '-'}</div>
+                  <div class="mt-1 text-xs text-ink-500">{buyer?.email ?? '-'}</div>
+                  <div class="text-xs text-ink-500">{buyer?.phone || address?.phone || '-'}</div>
+                </section>
+
+                <section>
+                  <div class="mb-1 text-xs font-semibold uppercase tracking-wider text-ink-400">Alamat pengiriman</div>
+                  <div class="text-sm font-semibold">{address?.recipient ?? '-'}</div>
+                  <div class="mt-1 text-xs leading-relaxed text-ink-600">{addressText(address)}</div>
+                  {#if address?.address_note}
+                    <div class="mt-1 text-xs text-ink-500">Catatan: {address.address_note}</div>
+                  {/if}
+                </section>
+
+                <section>
+                  <div class="mb-1 text-xs font-semibold uppercase tracking-wider text-ink-400">Pembayaran & ekspedisi</div>
+                  <div class="text-sm">{order?.payment?.method_name ?? '-'}</div>
+                  <div class="mt-1 text-xs text-ink-500">Payment: {order?.payment?.status ?? '-'}</div>
+                  <div class="text-xs text-ink-500">{order?.courier_name ?? '-'} {order?.courier_service ? `- ${order.courier_service}` : ''}</div>
+                  {#if order?.tracking_no}
+                    <div class="mt-1 text-xs">Resi: <b class="font-mono">{order.tracking_no}</b></div>
+                  {/if}
+                </section>
+              </div>
+
+              <div class="flex flex-col gap-3 rounded-xl bg-ink-50 p-3 sm:flex-row sm:items-center">
+                <a href={productHref(it)} class="shrink-0">
+                  <img src={it.product_image || it.product?.image} alt="" class="h-16 w-16 rounded-xl object-cover" />
+                </a>
+                <div class="min-w-0 flex-1">
+                  <a href={productHref(it)} class="font-semibold text-sm hover:text-ink-950 line-clamp-2">{it.product_name}</a>
+                  {#if it.variant_selection}
+                    <div class="mt-0.5 text-xs text-ink-500">{it.variant_selection}</div>
+                  {/if}
+                  <div class="mt-1 text-xs text-ink-500">{it.quantity} pcs x {fmtRp(it.price)}</div>
+                </div>
+                <div class="text-left sm:text-right">
+                  <div class="text-xs text-ink-500">Subtotal seller</div>
+                  <div class="font-semibold">{fmtRp(it.price * it.quantity)}</div>
+                </div>
+              </div>
+            </article>
+          {/each}
         </div>
       {/if}
     </div>

@@ -167,6 +167,7 @@
           variant_selection: i.variant_selection ?? null,
           voucher_code: appliedVouchers[i.product_id]?.code ?? null,
         })),
+        address_id: selectedAddressId ? Number(selectedAddressId) : null,
         recipient: ship.recipient,
         phone: ship.phone,
         country: 'Indonesia',

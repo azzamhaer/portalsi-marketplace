@@ -8,6 +8,7 @@
   let { product } = $props<{ product: any }>();
   const disc = $derived(calcDiscount(product.price, product.original_price));
   const inWishlist = $derived(wishlist.has(product.id));
+  const isOutOfStock = $derived((product.stock ?? 0) <= 0);
 
   async function toggleWish(e: Event) {
     e.preventDefault(); e.stopPropagation();
@@ -26,6 +27,9 @@
          class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
     {#if disc > 0}
       <span class="absolute top-2 left-2 sm:top-3 sm:left-3 bg-app-primary text-app-pfg text-[10px] font-semibold px-2 py-1 rounded-full">−{disc}%</span>
+    {/if}
+    {#if isOutOfStock}
+      <span class="absolute bottom-2 left-2 sm:bottom-3 sm:left-3 rounded-full bg-red-600 px-2.5 py-1 text-[10px] font-semibold text-white">Stok habis</span>
     {/if}
     <button on:click={toggleWish}
             class="absolute top-2 right-2 sm:top-3 sm:right-3 w-8 h-8 grid place-items-center rounded-full backdrop-blur-md hover:scale-110 transition shadow-soft
@@ -49,6 +53,9 @@
         <span class="text-xs text-ink-400 line-through">{fmtRp(product.original_price)}</span>
       {/if}
     </div>
+    {#if isOutOfStock}
+      <p class="text-xs text-red-600">Masukkan ke wishlist untuk notifikasi restock.</p>
+    {/if}
     <div class="flex items-center justify-between text-xs text-ink-500">
       {#if (product.reviews_count ?? 0) > 0}
         <span class="flex items-center gap-1">

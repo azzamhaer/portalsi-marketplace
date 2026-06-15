@@ -12,6 +12,7 @@ use App\Models\Setting;
 use App\Models\ShippingOption;
 use App\Services\RajaOngkirService;
 use App\Services\OrderPaymentService;
+use App\Services\ProductStockNotificationService;
 use App\Services\TripayService;
 use Illuminate\Http\Request;
 use Illuminate\Database\QueryException;
@@ -27,7 +28,8 @@ class OrderController extends Controller
     public function __construct(
         private TripayService $tripay,
         private RajaOngkirService $rajaongkir,
-        private OrderPaymentService $orderPayments
+        private OrderPaymentService $orderPayments,
+        private ProductStockNotificationService $stockNotifications
     ) {}
 
     public function index(Request $request)
@@ -64,6 +66,7 @@ class OrderController extends Controller
             'items.*.qty'               => 'required|integer|min:1',
             'items.*.variant_selection' => 'nullable|string|max:500',
             'items.*.voucher_code'      => 'nullable|string|max:30',
+            'address_id'         => 'required|integer|exists:addresses,id',
             'recipient'          => 'required|string|max:255',
             'phone'              => 'required|string|max:20',
             'country'            => 'nullable|string|max:80',
@@ -103,7 +106,7 @@ class OrderController extends Controller
             return DB::transaction(function () use ($data, $method, $userId, $request) {
             $productIds = collect($data['items'])->pluck('product_id');
             $products = Product::whereIn('id', $productIds)->where('is_active', true)
-                ->with('vendor:id,name,moderation_mode')->get()->keyBy('id');
+                ->with('vendor:id,user_id,name,moderation_mode')->get()->keyBy('id');
             // Block kalau ada produk dari toko yang sedang dimoderasi
             foreach ($products as $p) {
                 if ($p->vendor && in_array($p->vendor->moderation_mode, ['LIMITED', 'DISABLED'])) {
@@ -118,6 +121,10 @@ class OrderController extends Controller
             foreach ($data['items'] as $it) {
                 $p = $products->get($it['product_id']);
                 if (!$p) abort(422, 'Produk tidak ditemukan');
+                if ((int) $p->stock <= 0) {
+                    $this->stockNotifications->notifySellerOutOfStock($p);
+                    abort(422, "Stok {$p->name} habis. Masukkan ke wishlist untuk mendapatkan notifikasi ketika stok tersedia kembali.");
+                }
                 if ($it['qty'] > $p->stock) abort(422, "Stok {$p->name} hanya {$p->stock}");
                 $lineSubtotal = $p->price * $it['qty'];
                 $lineDiscount = 0;
@@ -157,25 +164,8 @@ class OrderController extends Controller
             if ($shipping  > 0) $itemsForTripay[] = ['sku'=>'SHIPPING', 'name'=>"Ongkir ({$data['courier_name']})", 'price'=>$shipping,  'quantity'=>1];
             if ($insurance > 0) $itemsForTripay[] = ['sku'=>'INSURANCE','name'=>'Asuransi Pengiriman',                'price'=>$insurance, 'quantity'=>1];
 
-            $addressRow = [
-                'user_id'      => $userId,
-                'recipient'    => $data['recipient'],
-                'phone'        => $data['phone'],
-                'country'      => $data['country'] ?? 'Indonesia',
-                'province'     => $data['province'],
-                'city'         => $data['city'],
-                'district'     => $data['district'],
-                'village'      => $data['village'],
-                'postal_code'  => $data['postal_code'] ?? null,
-                'latitude'     => $data['latitude'] ?? null,
-                'longitude'    => $data['longitude'] ?? null,
-                'full_address' => $data['full_address'],
-                'address_note' => $data['address_note'] ?? null,
-            ];
-            foreach (['province_id', 'city_id', 'district_id', 'village_id', 'rajaongkir_destination_id'] as $column) {
-                if (Schema::hasColumn('addresses', $column)) $addressRow[$column] = $data[$column] ?? null;
-            }
-            $address = Address::create($addressRow);
+            $address = Address::where('user_id', $userId)->whereKey($data['address_id'])->first();
+            if (!$address) abort(422, 'Alamat pengiriman tidak ditemukan. Pilih alamat dari profil Anda.');
 
             $orderNumber = 'PRT-' . strtoupper(base_convert(time(), 10, 36)) . '-' . strtoupper(substr(bin2hex(random_bytes(2)), 0, 4));
 
@@ -274,7 +264,7 @@ class OrderController extends Controller
         ]);
 
         $product = Product::where('is_active', true)
-            ->with('vendor:id,name,moderation_mode')
+            ->with('vendor:id,user_id,name,moderation_mode')
             ->findOrFail($data['product_id']);
 
         if ($product->vendor && in_array($product->vendor->moderation_mode, ['LIMITED', 'DISABLED'])) {
@@ -282,6 +272,12 @@ class OrderController extends Controller
         }
 
         if ($data['qty'] > $product->stock) {
+            if ((int) $product->stock <= 0) {
+                $this->stockNotifications->notifySellerOutOfStock($product);
+                return response()->json([
+                    'message' => "Stok {$product->name} habis. Masukkan ke wishlist untuk mendapatkan notifikasi ketika stok tersedia kembali.",
+                ], 422);
+            }
             return response()->json(['message' => "Stok {$product->name} hanya {$product->stock}"], 422);
         }
 
@@ -442,10 +438,35 @@ class OrderController extends Controller
 
     public function markDone(Request $request, $id)
     {
-        $order = Order::where('user_id', $request->user()->id)->findOrFail($id);
+        $order = Order::with('items')->where('user_id', $request->user()->id)->findOrFail($id);
+        if ($order->status !== 'SHIPPED') {
+            return response()->json(['message' => 'Pesanan hanya bisa diselesaikan setelah statusnya dikirim.'], 422);
+        }
         $order->update(['status' => 'DONE', 'done_at' => now()]);
+        $this->notifySellersOrderDone($order->fresh('items'));
         $this->sendOrderEmail($order->fresh(), $request->user(), 'done');
         return response()->json(['ok' => true]);
+    }
+
+    private function notifySellersOrderDone(Order $order): void
+    {
+        $itemsByVendor = $order->items->groupBy('vendor_id');
+        $vendors = \App\Models\Vendor::whereIn('id', $itemsByVendor->keys())->get()->keyBy('id');
+
+        foreach ($itemsByVendor as $vendorId => $items) {
+            $vendor = $vendors->get((int) $vendorId);
+            if (!$vendor?->user_id) continue;
+            $total = $items->sum(fn($item) => (int) $item->price * (int) $item->quantity);
+            \App\Models\UserNotification::send(
+                $vendor->user_id,
+                'SELLER_ORDER_DONE',
+                'Pesanan selesai',
+                "Buyer sudah mengonfirmasi pesanan #{$order->order_number} diterima. Dana Rp " . number_format($total, 0, ',', '.') . " masuk saldo penarikan setelah komisi.",
+                '/seller/withdraw',
+                'SUCCESS',
+                ['order_id' => $order->id, 'order_number' => $order->order_number, 'vendor_id' => $vendor->id]
+            );
+        }
     }
 
     public function paymentMethods()
@@ -503,7 +524,7 @@ class OrderController extends Controller
                 return response()->json([
                     'configured' => false,
                     'source' => 'manual',
-                    'message' => 'RajaOngkir dimatikan atau belum dikonfigurasi. Menampilkan opsi pengiriman manual.',
+                    'message' => 'Menampilkan opsi pengiriman manual.',
                     'weight_gram' => $weight,
                     'item_value' => $itemValue,
                     'options' => $this->manualShippingOptions($weight),

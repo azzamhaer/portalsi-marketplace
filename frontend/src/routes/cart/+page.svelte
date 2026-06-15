@@ -11,11 +11,13 @@
     cart.items.forEach(i => { (g[i.vendor_id] = g[i.vendor_id] || []).push(i); });
     return g;
   });
+  const hasSelectedOutOfStock = $derived(cart.items.some(i => i.checked && i.stock <= 0));
   const ship = $derived(cart.subtotal > 90000 ? 0 : 12000);
   const total = $derived(cart.subtotal + (cart.subtotal > 0 ? ship : 0));
 
   function checkout() {
     if (!cart.items.some(i => i.checked)) { toast.warn('Pilih minimal 1 produk'); return; }
+    if (hasSelectedOutOfStock) { toast.warn('Ada produk stok habis. Hapus atau batal pilih produk tersebut sebelum checkout.'); return; }
     if (!auth.user) { goto('/login?next=/checkout'); return; }
     goto('/checkout');
   }
@@ -78,20 +80,23 @@
                 <div class="flex-1 min-w-0">
                   <a href={`/product/${it.product_slug || it.product_id}`} class="font-medium line-clamp-2 hover:text-ink-950 text-sm">{it.name}</a>
                   {#if it.variant_selection}<div class="text-[10px] text-ink-500 mt-0.5">{it.variant_selection}</div>{/if}
+                  {#if it.stock <= 0}
+                    <div class="mt-1 text-xs font-medium text-red-600">Stok habis. Masukkan ke wishlist untuk notifikasi restock.</div>
+                  {/if}
                   <div class="text-sm font-semibold text-ink-950 mt-1">{fmtRp(it.price)}</div>
                   <div class="flex items-center gap-2 mt-2 sm:hidden">
                     <div class="inline-flex items-center border border-ink-200 rounded-full">
-                      <button on:click={() => cart.update(it.cart_key || it.product_id, it.qty - 1)} class="w-7 h-7 grid place-items-center"><Icon name="minus" size={12} /></button>
+                      <button on:click={() => cart.update(it.cart_key || it.product_id, it.qty - 1)} disabled={it.stock <= 0} class="w-7 h-7 grid place-items-center disabled:opacity-40"><Icon name="minus" size={12} /></button>
                       <span class="w-8 text-center text-sm">{it.qty}</span>
-                      <button on:click={() => cart.update(it.cart_key || it.product_id, it.qty + 1)} class="w-7 h-7 grid place-items-center"><Icon name="plus" size={12} /></button>
+                      <button on:click={() => cart.update(it.cart_key || it.product_id, it.qty + 1)} disabled={it.stock <= 0} class="w-7 h-7 grid place-items-center disabled:opacity-40"><Icon name="plus" size={12} /></button>
                     </div>
                     <button on:click={() => removeItem(it.cart_key || it.product_id)} class="ml-auto w-8 h-8 grid place-items-center text-red-600 hover:bg-red-50 rounded-full"><Icon name="trash-2" size={14} /></button>
                   </div>
                 </div>
                 <div class="hidden sm:inline-flex items-center border border-ink-200 rounded-full">
-                  <button on:click={() => cart.update(it.cart_key || it.product_id, it.qty - 1)} class="w-8 h-8 grid place-items-center hover:bg-ink-50 rounded-l-full"><Icon name="minus" size={12} /></button>
+                  <button on:click={() => cart.update(it.cart_key || it.product_id, it.qty - 1)} disabled={it.stock <= 0} class="w-8 h-8 grid place-items-center hover:bg-ink-50 rounded-l-full disabled:opacity-40"><Icon name="minus" size={12} /></button>
                   <span class="w-9 text-center text-sm">{it.qty}</span>
-                  <button on:click={() => cart.update(it.cart_key || it.product_id, it.qty + 1)} class="w-8 h-8 grid place-items-center hover:bg-ink-50 rounded-r-full"><Icon name="plus" size={12} /></button>
+                  <button on:click={() => cart.update(it.cart_key || it.product_id, it.qty + 1)} disabled={it.stock <= 0} class="w-8 h-8 grid place-items-center hover:bg-ink-50 rounded-r-full disabled:opacity-40"><Icon name="plus" size={12} /></button>
                 </div>
                 <button on:click={() => removeItem(it.cart_key || it.product_id)} class="hidden sm:grid w-8 h-8 place-items-center text-red-600 hover:bg-red-50 rounded-full">
                   <Icon name="trash-2" size={14} />
@@ -110,7 +115,7 @@
             <div class="flex justify-between"><span class="text-ink-500">Estimasi ongkir</span><span>{ship === 0 ? 'GRATIS' : fmtRp(ship)}</span></div>
             <div class="flex justify-between text-base font-semibold pt-3 border-t border-ink-100 mt-3"><span>Total</span><span>{fmtRp(total)}</span></div>
           </div>
-          <button on:click={checkout} disabled={cart.subtotal === 0} class="btn-primary btn-lg w-full mt-5">
+          <button on:click={checkout} disabled={cart.subtotal === 0 || hasSelectedOutOfStock} class="btn-primary btn-lg w-full mt-5">
             Checkout <Icon name="arrow-right" size={16} />
           </button>
           <a href="/products" class="btn-ghost btn-md w-full mt-2">Lanjut Belanja</a>

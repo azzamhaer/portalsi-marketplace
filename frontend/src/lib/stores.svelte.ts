@@ -70,11 +70,13 @@ function createCartStore() {
     get checkedItems() { return items.filter(i => i.checked); },
     get subtotal() { return items.filter(i => i.checked).reduce((s,i) => s + i.price * i.qty, 0); },
     add(it: Omit<CartItem, 'qty'|'checked'> & { qty?: number }) {
+      if (it.stock <= 0) return false;
       const cartKey = it.cart_key || `${it.product_id}:${it.variant_selection || ''}`;
       const existing = items.find(i => (i.cart_key || `${i.product_id}:${i.variant_selection || ''}`) === cartKey);
       if (existing) existing.qty = Math.min(it.stock, existing.qty + (it.qty ?? 1));
       else items = [...items, { ...it, cart_key: cartKey, qty: it.qty ?? 1, checked: true }];
       save();
+      return true;
     },
     update(key: string | number, qty: number) { items = items.map(i => (i.cart_key || i.product_id) === key ? { ...i, qty: Math.max(1, Math.min(i.stock, qty)) } : i); save(); },
     remove(key: string | number) { items = items.filter(i => (i.cart_key || i.product_id) !== key); save(); },
