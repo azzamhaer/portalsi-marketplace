@@ -231,7 +231,7 @@ class OrderController extends Controller
                 'fee'          => $trx['fee'],
                 'total'        => $trx['total'],
                 'status'       => $trx['status'],
-                'expired_at'   => date('Y-m-d H:i:s', $trx['expired_at']),
+                'expired_at'   => $this->paymentExpiredAt($trx['expired_at'] ?? null),
                 'raw_response' => json_encode($trx['raw']),
             ]);
 
@@ -381,6 +381,20 @@ class OrderController extends Controller
             return 'Checkout gagal karena database tidak bisa dihubungi. Coba beberapa saat lagi atau hubungi admin.';
         }
         return 'Checkout gagal karena masalah database. Silakan coba lagi atau hubungi admin.';
+    }
+
+    private function paymentExpiredAt(mixed $value): string
+    {
+        if (is_numeric($value)) {
+            return date('Y-m-d H:i:s', (int) $value);
+        }
+
+        if (is_string($value) && trim($value) !== '') {
+            $timestamp = strtotime($value);
+            if ($timestamp !== false) return date('Y-m-d H:i:s', $timestamp);
+        }
+
+        return now()->addDay()->format('Y-m-d H:i:s');
     }
 
     public function refreshStatus(Request $request, $id)

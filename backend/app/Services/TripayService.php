@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
 /**
@@ -54,8 +55,7 @@ class TripayService
 
     public function baseUrl(): string
     {
-        $mode = config('services.tripay.mode', 'sandbox');
-        return $mode === 'production'
+        return $this->mode === 'production'
             ? 'https://tripay.co.id/api'
             : 'https://tripay.co.id/api-sandbox';
     }
@@ -151,14 +151,24 @@ class TripayService
             'signature'      => $signature,
         ];
 
-        $resp = Http::withToken($this->apiKey)
-            ->acceptJson()
-            ->asJson()
-            ->timeout(30)
-            ->post($this->baseUrl() . '/transaction/create', $body);
+        try {
+            $resp = Http::withToken($this->apiKey)
+                ->acceptJson()
+                ->asJson()
+                ->timeout(30)
+                ->post($this->baseUrl() . '/transaction/create', $body);
+        } catch (\Throwable $e) {
+            Log::warning('Tripay connection failed: ' . $e->getMessage());
+            throw new RuntimeException('Tripay tidak bisa dihubungi. Periksa mode, API key, private key, merchant code, dan koneksi server.');
+        }
 
         $json = $resp->json();
+        if (!is_array($json)) {
+            Log::warning('Tripay returned non JSON response', ['status' => $resp->status(), 'body' => $resp->body()]);
+            throw new RuntimeException('Tripay mengembalikan respons tidak valid.');
+        }
         if (!($json['success'] ?? false)) {
+            Log::warning('Tripay transaction rejected', ['status' => $resp->status(), 'body' => $json]);
             throw new RuntimeException($json['message'] ?? 'Tripay error');
         }
         $d = $json['data'];
