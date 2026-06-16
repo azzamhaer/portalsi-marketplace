@@ -191,6 +191,9 @@
             <div>
               <h3 class="font-semibold flex items-center gap-2"><Icon name="wallet" size={16} /> Saldo Profil</h3>
               <p class="text-xs text-ink-500 mt-1">Refund pesanan yang disetujui admin akan masuk ke saldo ini.</p>
+              <a href="/refunds" class="mt-2 inline-flex items-center gap-1 text-xs text-app-primary hover:underline">
+                <Icon name="receipt" size={12} /> Lihat riwayat refund detail
+              </a>
             </div>
             <div class="text-right">
               <div class="text-xs text-ink-500">Tersedia</div>

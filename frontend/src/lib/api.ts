@@ -104,6 +104,7 @@ export const apiEndpoints = {
   simulateOrder:  (id: string|number) => api(`/orders/${id}/simulate`,{ method: 'POST' }),
   markOrderDone:  (id: string|number) => api(`/orders/${id}/done`,    { method: 'POST' }),
   requestReturn:  (id: string|number, reason: string) => api(`/orders/${id}/return`, { method: 'POST', body: { reason } as any }),
+  refunds:        () => api('/refunds'),
 
   /* seller */
   sellerRegister:   (b: any | FormData) => api('/seller/register', { method: 'POST', body: b }),

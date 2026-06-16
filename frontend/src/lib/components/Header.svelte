@@ -249,6 +249,7 @@
                   <button type="button" on:click={() => nav('/admin')} class="block w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-ink-50 text-accent-dark font-semibold">Admin Center</button>
                 {:else}
                   <button type="button" on:click={() => nav('/orders')}   class="block w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-ink-50">Pesanan</button>
+                  <button type="button" on:click={() => nav('/refunds')}  class="block w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-ink-50">Riwayat Refund</button>
                   <button type="button" on:click={() => nav('/wishlist')} class="block w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-ink-50">Wishlist</button>
                   <button type="button" on:click={() => nav('/chats')}    class="block w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-ink-50">Chat</button>
                   {#if auth.user.vendor_id}

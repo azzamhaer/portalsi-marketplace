@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\FollowController;
 use App\Http\Controllers\Api\FaqController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\OrderController;
+use App\Http\Controllers\Api\RefundController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\PaymentMethodController;
 use App\Http\Controllers\Api\ReviewController;
@@ -61,6 +62,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/wishlist',             [WishlistController::class, 'index']);
     Route::post('/wishlist/toggle',     [WishlistController::class, 'toggle']);
 
+    Route::get('/refunds',              [RefundController::class, 'index']);
     Route::get('/orders',               [OrderController::class, 'index']);
     Route::get('/orders/active-count',  [OrderController::class, 'activeCount']);
     Route::get('/orders/{id}',          [OrderController::class, 'show']);

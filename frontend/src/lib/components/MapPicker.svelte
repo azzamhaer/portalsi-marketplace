@@ -123,13 +123,38 @@
 <div class="space-y-2">
   <div class="relative overflow-hidden rounded-2xl border border-ink-200 bg-ink-50" style:height>
     <div bind:this={mapEl} class="h-full w-full"></div>
-    <div class="pointer-events-none absolute inset-0 grid place-items-center">
-      <div class="-mt-8 grid place-items-center text-red-600 drop-shadow">
-        <Icon name="map-pin" size={38} fill="currentColor" />
+
+    <!-- Pin tengah: titik koordinat persis di tengah peta -->
+    <div class="pointer-events-none absolute inset-0 grid place-items-center" aria-hidden="true">
+      <!-- Container terpusat pada center peta -->
+      <div class="relative" style="width:0;height:0;">
+        <!-- Pin drop (svg custom) — tip-nya tepat di titik tengah container -->
+        <svg viewBox="0 0 40 56" width="44" height="60"
+             style="position:absolute; left:50%; top:0; transform:translate(-50%, -100%);"
+             class="drop-shadow-[0_4px_6px_rgba(0,0,0,0.35)]">
+          <!-- Badan pin -->
+          <path d="M20 0 C9 0 0 9 0 20 c0 14 20 36 20 36 s20 -22 20 -36 C40 9 31 0 20 0 z"
+                fill="#e11d48"/>
+          <!-- Ring putih luar -->
+          <circle cx="20" cy="20" r="9" fill="#ffffff"/>
+          <!-- Dot tengah -->
+          <circle cx="20" cy="20" r="5" fill="#e11d48"/>
+        </svg>
+
+        <!-- Bayangan kecil di tanah (ground shadow) tepat di titik koordinat -->
+        <span style="position:absolute; left:50%; top:0; transform:translate(-50%,-50%);"
+              class="block w-3 h-1.5 rounded-full bg-black/40 blur-[1px]"></span>
+
+        <!-- Crosshair garis tipis vertikal & horizontal — petunjuk pixel tengah -->
+        <span style="position:absolute; left:50%; top:0; transform:translate(-50%,-50%);"
+              class="block w-[1px] h-3 bg-white/80 mix-blend-difference"></span>
+        <span style="position:absolute; left:50%; top:0; transform:translate(-50%,-50%);"
+              class="block w-3 h-[1px] bg-white/80 mix-blend-difference"></span>
       </div>
     </div>
+
     <div class="pointer-events-none absolute bottom-2 left-2 rounded-full bg-white/90 px-2.5 py-1 text-[11px] text-ink-600 shadow-soft">
-      Geser peta, pin tengah menjadi titik alamat
+      Geser peta — titik di tengah pin merah = koordinat alamat
     </div>
     {#if searching}
       <div class="absolute right-2 top-2 rounded-full bg-white/95 px-2.5 py-1 text-[11px] text-ink-600 shadow-soft">Mencari lokasi...</div>
