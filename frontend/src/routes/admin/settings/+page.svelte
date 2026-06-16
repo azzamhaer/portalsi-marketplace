@@ -10,6 +10,7 @@
   let freshLoading = $state(false);
   let freshRunning = $state(false);
   let freshPassword = $state('');
+  let seoFile = $state<File | null>(null);
 
   onMount(async () => {
     s = await apiEndpoints.adminSettings();
@@ -32,6 +33,15 @@
         brevo_api_key: s.brevo_api_key,
         brevo_sender_email: s.brevo_sender_email,
         brevo_sender_name: s.brevo_sender_name,
+        seo_title: s.seo_title,
+        seo_description: s.seo_description,
+        seo_image: s.seo_image,
+        seo_home_title: s.seo_home_title,
+        seo_home_description: s.seo_home_description,
+        seo_home_image: s.seo_home_image,
+        seo_products_title: s.seo_products_title,
+        seo_products_description: s.seo_products_description,
+        seo_products_image: s.seo_products_image,
       });
       const pub: any = await apiEndpoints.publicSettings();
       settingsStore.setAll(pub);
@@ -47,6 +57,22 @@
       toast.error(e.message || 'Gagal memuat ringkasan migrate fresh');
     } finally {
       freshLoading = false;
+    }
+  }
+
+  async function uploadSeoImage() {
+    if (!seoFile) return;
+    const fd = new FormData();
+    fd.append('seo_image', seoFile);
+    try {
+      const r: any = await apiEndpoints.adminUploadSeoImage(fd);
+      s.seo_image = r.seo_image;
+      seoFile = null;
+      const pub: any = await apiEndpoints.publicSettings();
+      settingsStore.setAll(pub);
+      toast.success('Gambar share diupload');
+    } catch (e: any) {
+      toast.error(e.message || 'Gagal upload gambar share');
     }
   }
 
@@ -80,6 +106,65 @@
       <Icon name="info" size={14} class="mt-0.5 shrink-0" />
       <div>
         Halaman ini untuk konfigurasi sistem (komisi, payment gateway, email). Untuk mengubah tampilan UI, logo, hero, FAQ, atau metode pembayaran yang ditampilkan, buka <a href="/admin/appearance" class="underline font-semibold">Tampilan</a>.
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 class="font-semibold mb-4 flex items-center gap-2"><Icon name="share-2" size={18} /> SEO & Share Preview</h3>
+      <p class="text-xs text-ink-500 mb-4">
+        Judul, deskripsi, dan gambar ini dipakai WhatsApp, Telegram, Facebook, dan crawler lain saat link marketplace dibagikan.
+        Gunakan gambar rasio 1.91:1 atau 1200x630 agar preview terlihat rapi.
+      </p>
+
+      <div class="grid lg:grid-cols-[1fr_280px] gap-4">
+        <div class="space-y-4">
+          <div class="grid sm:grid-cols-2 gap-3">
+            <div>
+              <label class="label">Default SEO title</label>
+              <input bind:value={s.seo_title} class="input" placeholder="MPSI Marketplace" />
+            </div>
+            <div>
+              <label class="label">Gambar share default</label>
+              <div class="flex gap-2">
+                <input type="file" accept="image/*" on:change={(e: any) => seoFile = e.target.files?.[0] ?? null} class="text-sm flex-1" />
+                <button type="button" on:click={uploadSeoImage} disabled={!seoFile} class="btn-outline btn-sm">Upload</button>
+              </div>
+            </div>
+            <div class="sm:col-span-2">
+              <label class="label">Default SEO description</label>
+              <textarea bind:value={s.seo_description} class="input" rows={2} maxlength="300" placeholder="Deskripsi singkat marketplace untuk preview share."></textarea>
+            </div>
+          </div>
+
+          <div class="grid sm:grid-cols-2 gap-3 rounded-2xl border border-ink-100 bg-ink-50 p-3">
+            <div class="sm:col-span-2 text-xs font-semibold uppercase tracking-widest text-ink-500">Homepage</div>
+            <div><label class="label">Title beranda</label><input bind:value={s.seo_home_title} class="input bg-white" placeholder="Kosongkan untuk pakai default" /></div>
+            <div><label class="label">Gambar beranda</label><input bind:value={s.seo_home_image} class="input bg-white" placeholder="Kosongkan untuk pakai gambar default" /></div>
+            <div class="sm:col-span-2"><label class="label">Description beranda</label><textarea bind:value={s.seo_home_description} class="input bg-white" rows={2} placeholder="Kosongkan untuk pakai default"></textarea></div>
+          </div>
+
+          <div class="grid sm:grid-cols-2 gap-3 rounded-2xl border border-ink-100 bg-ink-50 p-3">
+            <div class="sm:col-span-2 text-xs font-semibold uppercase tracking-widest text-ink-500">Halaman Produk</div>
+            <div><label class="label">Title /products</label><input bind:value={s.seo_products_title} class="input bg-white" placeholder="Semua Produk di MPSI" /></div>
+            <div><label class="label">Gambar /products</label><input bind:value={s.seo_products_image} class="input bg-white" placeholder="Kosongkan untuk pakai gambar default" /></div>
+            <div class="sm:col-span-2"><label class="label">Description /products</label><textarea bind:value={s.seo_products_description} class="input bg-white" rows={2} placeholder="Deskripsi katalog produk"></textarea></div>
+          </div>
+        </div>
+
+        <div class="rounded-2xl border border-ink-100 bg-white p-3 shadow-soft">
+          <div class="aspect-[1.91/1] overflow-hidden rounded-xl bg-ink-100">
+            {#if s.seo_image}
+              <img src={s.seo_image} alt="" class="h-full w-full object-cover" />
+            {:else}
+              <div class="grid h-full place-items-center text-ink-400"><Icon name="image" size={28} /></div>
+            {/if}
+          </div>
+          <div class="pt-3">
+            <div class="line-clamp-2 text-sm font-semibold text-ink-950">{s.seo_home_title || s.seo_title || s.app_name || 'MPSI Marketplace'}</div>
+            <div class="mt-1 line-clamp-3 text-xs leading-relaxed text-ink-500">{s.seo_home_description || s.seo_description || 'Deskripsi preview share akan tampil di sini.'}</div>
+            <div class="mt-3 flex items-center gap-2 text-xs text-ink-500"><Icon name="link" size={13} /> marketplace.portalsi.com</div>
+          </div>
+        </div>
       </div>
     </div>
 

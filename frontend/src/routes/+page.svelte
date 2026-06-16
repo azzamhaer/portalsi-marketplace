@@ -6,10 +6,41 @@
   import ProductGridSkeleton from '$lib/components/ProductGridSkeleton.svelte';
   import Icon from '$lib/components/Icon.svelte';
   import { settings } from '$lib/stores.svelte';
+  import { page } from '$app/stores';
   let { data } = $props();
+
+  function absoluteAsset(url?: string) {
+    if (!url) return '';
+    if (/^data:/.test(url)) return '';
+    if (/^https?:/.test(url)) return url;
+    return new URL(url, $page.url.origin).href;
+  }
+  const seo = $derived($page.data.settings ?? {});
+  const seoTitle = $derived(seo.seoHomeTitle || seo.seoTitle || `${seo.appName ?? 'MPSI'} Marketplace`);
+  const seoDescription = $derived(seo.seoHomeDescription || seo.seoDescription || 'Marketplace untuk belanja produk lokal, elektronik, kebutuhan harian, dan toko terpercaya.');
+  const seoImage = $derived(absoluteAsset(seo.seoHomeImage || seo.seoImage || ''));
+  const canonicalUrl = $derived($page.url.origin + $page.url.pathname);
 </script>
 
-<svelte:head><title>Beranda</title></svelte:head>
+<svelte:head>
+  <title>{seoTitle}</title>
+  <meta name="description" content={seoDescription} />
+  <link rel="canonical" href={canonicalUrl} />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content={seo.appName ?? 'MPSI Marketplace'} />
+  <meta property="og:title" content={seoTitle} />
+  <meta property="og:description" content={seoDescription} />
+  <meta property="og:url" content={canonicalUrl} />
+  {#if seoImage}
+    <meta property="og:image" content={seoImage} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:image" content={seoImage} />
+  {/if}
+  <meta name="twitter:card" content={seoImage ? 'summary_large_image' : 'summary'} />
+  <meta name="twitter:title" content={seoTitle} />
+  <meta name="twitter:description" content={seoDescription} />
+</svelte:head>
 
 <div class="container-x py-6 md:py-10 space-y-12 md:space-y-20">
   {#if settings.heroEnabled}

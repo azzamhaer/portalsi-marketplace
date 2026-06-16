@@ -29,6 +29,7 @@ Route::get('/categories',               [CatalogController::class, 'categories']
 Route::get('/tags',                     [TagController::class, 'index']);
 Route::get('/products',                 [CatalogController::class, 'products']);
 Route::get('/search/suggest',           [CatalogController::class, 'searchSuggest']);
+Route::get('/products/{id}/share-image',[CatalogController::class, 'productShareImage']);
 Route::get('/products/{id}',            [CatalogController::class, 'product']);
 Route::get('/vendors',                  [CatalogController::class, 'vendors']);
 Route::get('/vendors/{id}',             [CatalogController::class, 'vendor']);
@@ -162,6 +163,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/settings',               [SettingsController::class, 'adminSave']);
         Route::post('/settings/logo',         [SettingsController::class, 'uploadLogo']);
         Route::post('/settings/hero',         [SettingsController::class, 'uploadHero']);
+        Route::post('/settings/seo-image',    [SettingsController::class, 'uploadSeoImage']);
         Route::get('/shipping-options',       [AdminController::class, 'shippingOptions']);
         Route::put('/shipping-options',       [AdminController::class, 'saveShippingOptions']);
 

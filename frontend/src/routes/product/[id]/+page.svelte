@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import Icon from '$lib/components/Icon.svelte';
   import { fmtRp, calcDiscount } from '$lib/utils';
-  import { cart, auth, toast, wishlist } from '$lib/stores.svelte';
+  import { cart, auth, toast, wishlist, settings } from '$lib/stores.svelte';
   import { apiEndpoints } from '$lib/api';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
@@ -10,6 +10,7 @@
   import VendorBadge from '$lib/components/VendorBadge.svelte';
   import ReportButton from '$lib/components/ReportButton.svelte';
   import { loginHref } from '$lib/stores.svelte';
+  import { PUBLIC_API_URL } from '$env/static/public';
 
   let { data } = $props();
   const p = $derived(data.product);
@@ -20,18 +21,24 @@
   const isAdmin = $derived(auth.user?.role === 'ADMIN');
   const isOutOfStock = $derived((p.stock ?? 0) <= 0);
   const productUrl = $derived($page.url.origin + $page.url.pathname);
+  const shareDomain = $derived($page.url.hostname.replace(/^www\./, ''));
   const seoDescription = $derived(String(p.description || `${p.name} dari ${v.name}`).replace(/\s+/g, ' ').slice(0, 155));
-  const shareText = $derived(`${p.name} - ${fmtRp(p.price)} di MPSI`);
+  const shareTitle = $derived(`${p.name} - ${fmtRp(p.price)}`);
+  const shareText = $derived(`${shareTitle} di ${settings.appName ?? 'MPSI'}`);
+  const shareMessage = $derived(`Temukan ${p.name} seharga ${fmtRp(p.price)} di ${settings.appName ?? 'MPSI'}.\n${productUrl}`);
+  const canNativeShare = $derived(typeof navigator !== 'undefined' && 'share' in navigator);
+  let shareOpen = $state(false);
 
   // Gallery state
   const images = $derived.by(() => {
     const arr = Array.isArray(p?.images) ? p.images.filter((x: any) => typeof x === 'string' && x) : [];
     return arr.length ? arr : [p?.image].filter(Boolean);
   });
-  const seoImage = $derived(String(images[0] || '').startsWith('http') || String(images[0] || '').startsWith('data:')
-    ? images[0]
-    : `${$page.url.origin}${images[0] || p.image || ''}`);
+  const apiBase = (PUBLIC_API_URL || 'https://api-marketplace.portalsi.com/api').replace(/\/$/, '');
+  const productShareImageUrl = $derived(`${apiBase}/products/${encodeURIComponent(p.slug || p.id)}/share-image`);
+  const seoImage = $derived(productShareImageUrl);
   let activeImgIdx = $state(0);
+  const previewImage = $derived(images[activeImgIdx] || images[0] || p.image || productShareImageUrl);
   let zoomOpen = $state(false);
 
   function nextImg() { activeImgIdx = (activeImgIdx + 1) % images.length; }
@@ -173,12 +180,13 @@
     finally { sendingChat = false; }
   }
   async function shareProduct(kind: 'native' | 'copy' | 'whatsapp') {
+    shareOpen = false;
     if (kind === 'whatsapp') {
-      window.open(`https://wa.me/?text=${encodeURIComponent(`${shareText}\n${productUrl}`)}`, '_blank', 'noopener,noreferrer');
+      window.open(`https://wa.me/?text=${encodeURIComponent(shareMessage)}`, '_blank', 'noopener,noreferrer');
       return;
     }
     if (kind === 'native' && navigator.share) {
-      try { await navigator.share({ title: p.name, text: shareText, url: productUrl }); return; }
+      try { await navigator.share({ title: shareTitle, text: seoDescription, url: productUrl }); return; }
       catch {}
     }
     await navigator.clipboard.writeText(productUrl);
@@ -187,19 +195,21 @@
 </script>
 
 <svelte:head>
-  <title>{p.name} - {fmtRp(p.price)} | MPSI</title>
+  <title>{p.name} - {fmtRp(p.price)} | {settings.appName ?? 'MPSI'}</title>
   <meta name="description" content={seoDescription} />
   <link rel="canonical" href={productUrl} />
   <meta property="og:type" content="product" />
-  <meta property="og:site_name" content="MPSI Marketplace" />
-  <meta property="og:title" content={`${p.name} - ${fmtRp(p.price)}`} />
+  <meta property="og:site_name" content={settings.appName ?? 'MPSI Marketplace'} />
+  <meta property="og:title" content={shareTitle} />
   <meta property="og:description" content={seoDescription} />
   <meta property="og:url" content={productUrl} />
   <meta property="og:image" content={seoImage} />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
   <meta property="product:price:amount" content={String(p.price)} />
   <meta property="product:price:currency" content="IDR" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content={`${p.name} - ${fmtRp(p.price)}`} />
+  <meta name="twitter:title" content={shareTitle} />
   <meta name="twitter:description" content={seoDescription} />
   <meta name="twitter:image" content={seoImage} />
 </svelte:head>
@@ -254,10 +264,10 @@
             {/each}
           </div>
         {/if}
-        <div class="mt-4 flex flex-wrap gap-2">
-          <button type="button" on:click={() => shareProduct('native')} class="btn-outline btn-sm"><Icon name="share-2" size={13} /> Share</button>
-          <button type="button" on:click={() => shareProduct('whatsapp')} class="btn-outline btn-sm"><Icon name="message-circle" size={13} /> WhatsApp</button>
-          <button type="button" on:click={() => shareProduct('copy')} class="btn-outline btn-sm"><Icon name="link" size={13} /> Salin link</button>
+        <div class="mt-4">
+          <button type="button" on:click={() => shareOpen = true} class="btn-outline btn-sm">
+            <Icon name="share-2" size={13} /> Bagikan
+          </button>
         </div>
       </div>
 
@@ -489,6 +499,54 @@
     </section>
   {/if}
 </div>
+
+{#if shareOpen}
+  <div class="fixed inset-0 z-50 grid place-items-end bg-black/40 p-0 backdrop-blur-sm sm:place-items-center sm:p-4" role="dialog" aria-modal="true">
+    <button type="button" class="absolute inset-0 cursor-default" aria-label="Tutup popup share" on:click={() => shareOpen = false}></button>
+    <div class="relative w-full rounded-t-[24px] bg-white p-4 shadow-elevated sm:max-w-md sm:rounded-2xl">
+      <div class="mb-4 flex items-center justify-between gap-3">
+        <div>
+          <h2 class="text-base font-bold text-ink-950">Bagikan produk</h2>
+          <p class="mt-0.5 text-xs text-ink-500">Preview link akan mengikuti metadata halaman produk.</p>
+        </div>
+        <button type="button" on:click={() => shareOpen = false} class="grid h-9 w-9 place-items-center rounded-full hover:bg-ink-100" aria-label="Tutup">
+          <Icon name="x" size={18} />
+        </button>
+      </div>
+
+      <div class="overflow-hidden rounded-2xl border border-ink-100 bg-white">
+        <div class="aspect-[1.91/1] bg-ink-50">
+          <img src={previewImage} alt="" class="h-full w-full object-cover" />
+        </div>
+        <div class="border-t border-ink-100 p-3">
+          <div class="line-clamp-2 text-sm font-semibold text-ink-950">{shareTitle}</div>
+          <div class="mt-1 line-clamp-2 text-xs leading-relaxed text-ink-500">{seoDescription}</div>
+          <div class="mt-3 flex items-center gap-2 text-xs text-ink-500">
+            <Icon name="link" size={13} />
+            {shareDomain}
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-4 grid gap-2">
+        <button type="button" on:click={() => shareProduct('whatsapp')} class="flex items-center gap-3 rounded-xl border border-ink-100 px-3 py-3 text-left text-sm font-semibold transition hover:bg-ink-50">
+          <span class="grid h-9 w-9 place-items-center rounded-full bg-emerald-50 text-emerald-700"><Icon name="message-circle" size={18} /></span>
+          Share ke WhatsApp
+        </button>
+        {#if canNativeShare}
+          <button type="button" on:click={() => shareProduct('native')} class="flex items-center gap-3 rounded-xl border border-ink-100 px-3 py-3 text-left text-sm font-semibold transition hover:bg-ink-50">
+            <span class="grid h-9 w-9 place-items-center rounded-full bg-ink-100 text-ink-700"><Icon name="send" size={17} /></span>
+            Share lewat perangkat
+          </button>
+        {/if}
+        <button type="button" on:click={() => shareProduct('copy')} class="flex items-center gap-3 rounded-xl border border-ink-100 px-3 py-3 text-left text-sm font-semibold transition hover:bg-ink-50">
+          <span class="grid h-9 w-9 place-items-center rounded-full bg-ink-100 text-ink-700"><Icon name="copy" size={17} /></span>
+          Salin link produk
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
 
 <!-- Zoom lightbox -->
 {#if zoomOpen}

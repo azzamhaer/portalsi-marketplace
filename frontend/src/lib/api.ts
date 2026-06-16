@@ -194,6 +194,7 @@ export const apiEndpoints = {
   adminSaveSettings: (b: any) => api('/admin/settings', { method: 'PUT', body: b }),
   adminUploadLogo:   (fd: FormData) => api('/admin/settings/logo', { method: 'POST', body: fd as any }),
   adminUploadHero:   (fd: FormData) => api('/admin/settings/hero', { method: 'POST', body: fd as any }),
+  adminUploadSeoImage: (fd: FormData) => api('/admin/settings/seo-image', { method: 'POST', body: fd as any }),
   adminShipping:     () => api('/admin/shipping-options'),
   adminSaveShipping: (list: any[]) => api('/admin/shipping-options', { method: 'PUT', body: { items: list } as any }),
   adminTags:         (q='') => api('/admin/tags' + (q ? '?'+q : '')),

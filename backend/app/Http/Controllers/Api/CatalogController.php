@@ -154,6 +154,46 @@ class CatalogController extends Controller
         return response()->json(['product' => $product, 'related' => $related]);
     }
 
+    public function productShareImage($idOrSlug)
+    {
+        $product = is_numeric($idOrSlug)
+            ? Product::find((int) $idOrSlug)
+            : Product::where('slug', $idOrSlug)->first();
+        if (!$product) abort(404, 'Produk tidak ditemukan');
+
+        $images = is_array($product->images) ? array_values(array_filter($product->images)) : [];
+        $image = trim((string) ($images[0] ?? $product->image ?? ''));
+
+        if ($image === '') {
+            return $this->generatedProductShareImage($product->name);
+        }
+
+        if (preg_match('#^data:(image/(png|jpe?g|gif|webp));base64,([A-Za-z0-9+/=\r\n]+)$#i', $image, $m)) {
+            $bytes = base64_decode($m[3], true);
+            if ($bytes !== false) {
+                return response($bytes, 200)
+                    ->header('Content-Type', strtolower($m[1]) === 'image/jpg' ? 'image/jpeg' : $m[1])
+                    ->header('Cache-Control', 'public, max-age=86400');
+            }
+        }
+
+        if (str_starts_with($image, 'data:image/svg+xml;utf8,')) {
+            return response(rawurldecode(substr($image, strlen('data:image/svg+xml;utf8,'))), 200)
+                ->header('Content-Type', 'image/svg+xml')
+                ->header('Cache-Control', 'public, max-age=86400');
+        }
+
+        if (str_starts_with($image, 'http://') || str_starts_with($image, 'https://')) {
+            return redirect()->away($image, 302);
+        }
+
+        if (str_starts_with($image, '/')) {
+            return redirect()->away(rtrim(config('app.url'), '/') . $image, 302);
+        }
+
+        return $this->generatedProductShareImage($product->name);
+    }
+
     public function vendors(Request $request)
     {
         $q = Vendor::query();
@@ -231,6 +271,21 @@ class CatalogController extends Controller
     private function rankedProductIdsForSearch(string $query): array
     {
         return $this->rankedProductsForSearch($query, 500)->pluck('id')->all();
+    }
+
+    private function generatedProductShareImage(string $name)
+    {
+        $safeName = htmlspecialchars(mb_strimwidth($name, 0, 72, '...'), ENT_QUOTES, 'UTF-8');
+        $svg = "<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='630' viewBox='0 0 1200 630'>"
+            . "<rect width='1200' height='630' fill='#f5f5f5'/>"
+            . "<rect x='90' y='110' width='1020' height='410' rx='36' fill='#ffffff'/>"
+            . "<text x='600' y='310' text-anchor='middle' font-size='56' font-weight='800' fill='#171717' font-family='Arial,sans-serif'>{$safeName}</text>"
+            . "<text x='600' y='380' text-anchor='middle' font-size='28' fill='#737373' font-family='Arial,sans-serif'>MPSI Marketplace</text>"
+            . "</svg>";
+
+        return response($svg, 200)
+            ->header('Content-Type', 'image/svg+xml')
+            ->header('Cache-Control', 'public, max-age=86400');
     }
 
     private function rankedProductsForSearch(string $query, int $limit)

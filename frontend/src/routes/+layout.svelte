@@ -19,7 +19,8 @@
   const isExempt = $derived(PUBLIC_PATHS.some((p) => $page.url.pathname === p || $page.url.pathname.startsWith(p + '/')));
   const needsVerify = $derived(!!auth.user && !auth.user.email_verified_at && !isExempt);
   const siteName = $derived(settings.appName ?? 'MPSI Marketplace');
-  const defaultDescription = 'Marketplace MPSI untuk belanja produk lokal, elektronik, kebutuhan harian, dan toko terpercaya dengan pembayaran aman.';
+  const defaultTitle = $derived(settings.seoTitle || siteName);
+  const defaultDescription = $derived(settings.seoDescription || 'Marketplace MPSI untuk belanja produk lokal, elektronik, kebutuhan harian, dan toko terpercaya dengan pembayaran aman.');
 
   // Apply server-loaded settings IMMEDIATELY (no flash)
   if (data?.settings) settings.setAll(data.settings);
@@ -35,6 +36,16 @@
   }
   const faviconHref = $derived(
     settings.logo || makeFallbackFavicon(settings.appName, settings.primary || '#0a0a0a', settings.primaryFg || '#ffffff')
+  );
+  function absoluteAsset(url?: string) {
+    if (!url) return '';
+    if (/^data:/.test(url)) return '';
+    if (/^https?:/.test(url)) return url;
+    return new URL(url, $page.url.origin).href;
+  }
+  const defaultSeoImage = $derived(absoluteAsset(settings.seoImage || ''));
+  const usesOwnSeoHead = $derived(
+    $page.status >= 400 || ['/', '/products', '/product/[id]'].includes($page.route.id ?? '')
   );
 
   onMount(async () => {
@@ -65,16 +76,26 @@
 </script>
 
 <svelte:head>
-  <title>{siteName}</title>
-  <meta name="description" content={defaultDescription} />
-  <meta name="robots" content="index,follow" />
-  <link rel="canonical" href={$page.url.href} />
-  <meta property="og:type" content="website" />
-  <meta property="og:site_name" content={siteName} />
-  <meta property="og:title" content={siteName} />
-  <meta property="og:description" content={defaultDescription} />
-  <meta property="og:url" content={$page.url.href} />
-  <meta name="twitter:card" content="summary" />
+  {#if !usesOwnSeoHead}
+    <title>{defaultTitle}</title>
+    <meta name="description" content={defaultDescription} />
+    <meta name="robots" content="index,follow" />
+    <link rel="canonical" href={$page.url.href} />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content={siteName} />
+    <meta property="og:title" content={defaultTitle} />
+    <meta property="og:description" content={defaultDescription} />
+    <meta property="og:url" content={$page.url.href} />
+    {#if defaultSeoImage}
+      <meta property="og:image" content={defaultSeoImage} />
+      <meta property="og:image:width" content="1200" />
+      <meta property="og:image:height" content="630" />
+      <meta name="twitter:image" content={defaultSeoImage} />
+    {/if}
+    <meta name="twitter:card" content={defaultSeoImage ? 'summary_large_image' : 'summary'} />
+    <meta name="twitter:title" content={defaultTitle} />
+    <meta name="twitter:description" content={defaultDescription} />
+  {/if}
   <link rel="icon" type="image/svg+xml" href={faviconHref} />
   <link rel="apple-touch-icon" href={faviconHref} />
   <meta name="theme-color" content={settings.primary || '#0a0a0a'} />

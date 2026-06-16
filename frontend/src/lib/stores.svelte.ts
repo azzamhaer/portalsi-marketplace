@@ -133,6 +133,15 @@ function createSettingsStore() {
     footerContact: '',
     footerDesc: '',
     hiddenPages: [] as string[],
+    seoTitle: 'MPSI',
+    seoDescription: 'Marketplace MPSI untuk belanja produk lokal, elektronik, kebutuhan harian, dan toko terpercaya dengan pembayaran aman.',
+    seoImage: '',
+    seoHomeTitle: '',
+    seoHomeDescription: '',
+    seoHomeImage: '',
+    seoProductsTitle: '',
+    seoProductsDescription: '',
+    seoProductsImage: '',
   };
   let s = $state<any>({ ...defaults });
   if (browser) {
@@ -160,6 +169,15 @@ function createSettingsStore() {
     get footerContact(){ return s.footerContact; },
     get footerDesc()   { return s.footerDesc; },
     get hiddenPages()  { return s.hiddenPages ?? []; },
+    get seoTitle()     { return s.seoTitle; },
+    get seoDescription(){ return s.seoDescription; },
+    get seoImage()     { return s.seoImage; },
+    get seoHomeTitle() { return s.seoHomeTitle; },
+    get seoHomeDescription(){ return s.seoHomeDescription; },
+    get seoHomeImage() { return s.seoHomeImage; },
+    get seoProductsTitle(){ return s.seoProductsTitle; },
+    get seoProductsDescription(){ return s.seoProductsDescription; },
+    get seoProductsImage(){ return s.seoProductsImage; },
     setAll(data: any) {
       s = { ...defaults, ...data };
       if (browser) {

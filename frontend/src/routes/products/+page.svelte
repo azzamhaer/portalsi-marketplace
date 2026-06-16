@@ -16,6 +16,18 @@
     ['exp', 'Termahal', 'arrow-up'],
     ['rating', 'Rating', 'star'],
   ];
+  function absoluteAsset(url?: string) {
+    if (!url) return '';
+    if (/^data:/.test(url)) return '';
+    if (/^https?:/.test(url)) return url;
+    return new URL(url, $page.url.origin).href;
+  }
+  const seo = $derived($page.data.settings ?? {});
+  const baseTitle = $derived(seo.seoProductsTitle || `Semua Produk di ${seo.appName ?? 'MPSI'}`);
+  const seoTitle = $derived(data.search ? `Hasil "${data.search}" | ${seo.appName ?? 'MPSI'}` : data.tag ? `#${data.tag} | ${seo.appName ?? 'MPSI'}` : baseTitle);
+  const seoDescription = $derived(seo.seoProductsDescription || seo.seoDescription || 'Jelajahi katalog produk pilihan dari toko terpercaya dengan pembayaran aman.');
+  const seoImage = $derived(absoluteAsset(seo.seoProductsImage || seo.seoImage || ''));
+  const canonicalUrl = $derived($page.url.origin + $page.url.pathname);
 
   function setSort(v: string) {
     const u = new URL($page.url);
@@ -30,7 +42,25 @@
   }
 </script>
 
-<svelte:head><title>Semua Produk</title></svelte:head>
+<svelte:head>
+  <title>{seoTitle}</title>
+  <meta name="description" content={seoDescription} />
+  <link rel="canonical" href={canonicalUrl} />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content={seo.appName ?? 'MPSI Marketplace'} />
+  <meta property="og:title" content={seoTitle} />
+  <meta property="og:description" content={seoDescription} />
+  <meta property="og:url" content={canonicalUrl} />
+  {#if seoImage}
+    <meta property="og:image" content={seoImage} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:image" content={seoImage} />
+  {/if}
+  <meta name="twitter:card" content={seoImage ? 'summary_large_image' : 'summary'} />
+  <meta name="twitter:title" content={seoTitle} />
+  <meta name="twitter:description" content={seoDescription} />
+</svelte:head>
 
 <div class="container-x py-6 sm:py-8">
   <div class="mb-6 max-w-3xl">

@@ -34,6 +34,15 @@ class SettingsController extends Controller
             'footerContact' => Setting::get('footer_contact', ''),
             'footerDesc'    => Setting::get('footer_desc', ''),
             'hiddenPages'   => json_decode(Setting::get('hidden_pages', '[]'), true) ?: [],
+            'seoTitle'       => Setting::get('seo_title', Setting::get('app_name', 'MPSI')),
+            'seoDescription' => Setting::get('seo_description', 'Marketplace MPSI untuk belanja produk lokal, elektronik, kebutuhan harian, dan toko terpercaya dengan pembayaran aman.'),
+            'seoImage'       => Setting::get('seo_image', ''),
+            'seoHomeTitle'   => Setting::get('seo_home_title', ''),
+            'seoHomeDescription' => Setting::get('seo_home_description', ''),
+            'seoHomeImage'   => Setting::get('seo_home_image', ''),
+            'seoProductsTitle' => Setting::get('seo_products_title', ''),
+            'seoProductsDescription' => Setting::get('seo_products_description', ''),
+            'seoProductsImage' => Setting::get('seo_products_image', ''),
         ]);
     }
 
@@ -77,6 +86,15 @@ class SettingsController extends Controller
             'footer_contact'=> Setting::get('footer_contact', ''),
             'footer_desc'   => Setting::get('footer_desc', ''),
             'hidden_pages'  => json_decode(Setting::get('hidden_pages', '[]'), true) ?: [],
+            'seo_title'       => Setting::get('seo_title', Setting::get('app_name', 'MPSI')),
+            'seo_description' => Setting::get('seo_description', 'Marketplace MPSI untuk belanja produk lokal, elektronik, kebutuhan harian, dan toko terpercaya dengan pembayaran aman.'),
+            'seo_image'       => Setting::get('seo_image', ''),
+            'seo_home_title'  => Setting::get('seo_home_title', ''),
+            'seo_home_description' => Setting::get('seo_home_description', ''),
+            'seo_home_image'  => Setting::get('seo_home_image', ''),
+            'seo_products_title' => Setting::get('seo_products_title', ''),
+            'seo_products_description' => Setting::get('seo_products_description', ''),
+            'seo_products_image' => Setting::get('seo_products_image', ''),
             'palettes' => self::PALETTES,
         ]);
     }
@@ -130,6 +148,15 @@ class SettingsController extends Controller
             'footer_desc'   => 'sometimes|nullable|string|max:500',
             'hidden_pages'  => 'sometimes|nullable|array',
             'hidden_pages.*'=> 'string|in:payment-info,help,about,vendors',
+            'seo_title'       => 'sometimes|nullable|string|max:120',
+            'seo_description' => 'sometimes|nullable|string|max:300',
+            'seo_image'       => 'sometimes|nullable|string|max:1000',
+            'seo_home_title'  => 'sometimes|nullable|string|max:120',
+            'seo_home_description' => 'sometimes|nullable|string|max:300',
+            'seo_home_image'  => 'sometimes|nullable|string|max:1000',
+            'seo_products_title' => 'sometimes|nullable|string|max:120',
+            'seo_products_description' => 'sometimes|nullable|string|max:300',
+            'seo_products_image' => 'sometimes|nullable|string|max:1000',
         ]);
         // Convert arrays to JSON for storage
         if (isset($data['footer_columns']))  $data['footer_columns']  = json_encode($data['footer_columns']);
@@ -281,5 +308,19 @@ class SettingsController extends Controller
         $dataUri = "data:{$mime};base64,{$contents}";
         Setting::put('hero_image', $dataUri);
         return response()->json(['hero_image' => $dataUri]);
+    }
+
+    public function uploadSeoImage(Request $request)
+    {
+        $request->validate(['seo_image' => 'required|file|image|max:4096']);
+        $file = $request->file('seo_image');
+        $ext = strtolower($file->getClientOriginalExtension() ?: $file->extension() ?: 'jpg');
+        $path = $file->storeAs('branding', 'seo-share-' . time() . '.' . $ext, 'public');
+        $url = Storage::disk('public')->url($path);
+        if (!str_starts_with($url, 'http')) {
+            $url = rtrim(config('app.url'), '/') . $url;
+        }
+        Setting::put('seo_image', $url);
+        return response()->json(['seo_image' => $url]);
     }
 }
