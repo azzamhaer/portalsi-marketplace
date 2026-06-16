@@ -1,7 +1,56 @@
-import { browser } from '$app/environment';
+import { browser, dev } from '$app/environment';
 import { PUBLIC_API_URL } from '$env/static/public';
 
-const BASE = PUBLIC_API_URL || 'https://api-marketplace.portalsi.com/api';
+const DEFAULT_API_URL = 'https://api-marketplace.portalsi.com/api';
+const LOCAL_API_PORT = '8000';
+
+function cleanBaseUrl(url: string): string {
+  return url.trim().replace(/\/+$/, '');
+}
+
+function isLoopbackHost(hostname: string): boolean {
+  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1' || hostname === '[::1]';
+}
+
+function isPrivateNetworkHost(hostname: string): boolean {
+  return (
+    /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname) ||
+    /^192\.168\.\d{1,3}\.\d{1,3}$/.test(hostname) ||
+    /^172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}$/.test(hostname)
+  );
+}
+
+function resolveBaseUrl(): string {
+  const configured = cleanBaseUrl(PUBLIC_API_URL || DEFAULT_API_URL);
+
+  try {
+    const apiUrl = new URL(configured);
+
+    if (!browser) {
+      return !dev && isLoopbackHost(apiUrl.hostname) ? DEFAULT_API_URL : configured;
+    }
+
+    const pageUrl = new URL(window.location.href);
+    const pageIsLocal = isLoopbackHost(pageUrl.hostname) || isPrivateNetworkHost(pageUrl.hostname);
+
+    if (isLoopbackHost(apiUrl.hostname)) {
+      if (pageIsLocal && !isLoopbackHost(pageUrl.hostname)) {
+        apiUrl.hostname = pageUrl.hostname;
+        apiUrl.port = apiUrl.port || LOCAL_API_PORT;
+        return cleanBaseUrl(apiUrl.toString());
+      }
+
+      if (!pageIsLocal) return DEFAULT_API_URL;
+    }
+  } catch {
+    return configured;
+  }
+
+  return configured;
+}
+
+const BASE = resolveBaseUrl();
+export const apiBaseUrl = BASE;
 
 export class ApiError extends Error {
   constructor(public status: number, public data: any, message: string) { super(message); }

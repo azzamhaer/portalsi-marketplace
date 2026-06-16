@@ -3,14 +3,13 @@
   import Icon from '$lib/components/Icon.svelte';
   import { fmtRp, calcDiscount } from '$lib/utils';
   import { cart, auth, toast, wishlist, settings } from '$lib/stores.svelte';
-  import { apiEndpoints } from '$lib/api';
+  import { apiBaseUrl, apiEndpoints } from '$lib/api';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import ProductGrid from '$lib/components/ProductGrid.svelte';
   import VendorBadge from '$lib/components/VendorBadge.svelte';
   import ReportButton from '$lib/components/ReportButton.svelte';
   import { loginHref } from '$lib/stores.svelte';
-  import { PUBLIC_API_URL } from '$env/static/public';
 
   let { data } = $props();
   const p = $derived(data.product);
@@ -34,7 +33,7 @@
     const arr = Array.isArray(p?.images) ? p.images.filter((x: any) => typeof x === 'string' && x) : [];
     return arr.length ? arr : [p?.image].filter(Boolean);
   });
-  const apiBase = (PUBLIC_API_URL || 'https://api-marketplace.portalsi.com/api').replace(/\/$/, '');
+  const apiBase = apiBaseUrl;
   const productShareImageUrl = $derived(`${apiBase}/products/${encodeURIComponent(p.slug || p.id)}/share-image`);
   const seoImage = $derived(productShareImageUrl);
   let activeImgIdx = $state(0);

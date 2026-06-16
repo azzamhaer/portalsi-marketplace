@@ -26,7 +26,7 @@ cp .env.example .env
 php artisan key:generate
 # Buat database manual: CREATE DATABASE portalsi;
 php artisan migrate --seed
-php artisan serve   # http://localhost:8000
+php artisan serve --host=0.0.0.0 --port=8000   # http://localhost:8000, LAN: http://IP-LAPTOP:8000
 ```
 
 ### 2. Frontend SvelteKit
@@ -34,10 +34,14 @@ php artisan serve   # http://localhost:8000
 ```bash
 cd frontend
 npm install
-npm run dev   # http://localhost:5173
+npm run dev   # http://localhost:5173, LAN: http://IP-LAPTOP:5173
 ```
 
 ### 3. Buka **http://localhost:5173**
+
+Untuk test dari HP/device lain di Wi-Fi yang sama, buka `http://IP-LAPTOP:5173`.
+Jika `PUBLIC_API_URL` mengarah ke `localhost:8000`, frontend akan otomatis memakai host LAN yang sama untuk API saat dibuka dari LAN.
+Saat dibuka dari domain publik, frontend tidak akan memakai `localhost` dan akan kembali ke API production.
 
 ---
 
