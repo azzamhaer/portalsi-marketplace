@@ -27,6 +27,21 @@ class VendorSeeder extends Seeder
             ['key'=>'v12','name'=>'Voucher Express',       'city'=>'Jakarta Selatan','desc'=>'Top up game, pulsa, paket data, & voucher digital instan.',              'official'=>true,  'rating'=>5.0, 'sold'=>42100, 'fol'=>38500, 'color'=>'#1F1F1F', 'em'=>'🎟️'],
         ];
 
+        $cityDefaults = [
+            'Jakarta Pusat' => ['province' => 'DKI Jakarta', 'district' => 'Gambir', 'village' => 'Gambir', 'postal_code' => '10110', 'latitude' => -6.1753924, 'longitude' => 106.8271528],
+            'Bandung' => ['province' => 'Jawa Barat', 'district' => 'Bandung Wetan', 'village' => 'Cihapit', 'postal_code' => '40114', 'latitude' => -6.9174639, 'longitude' => 107.6191228],
+            'Surabaya' => ['province' => 'Jawa Timur', 'district' => 'Genteng', 'village' => 'Embong Kaliasin', 'postal_code' => '60271', 'latitude' => -7.2574719, 'longitude' => 112.7520883],
+            'Yogyakarta' => ['province' => 'DI Yogyakarta', 'district' => 'Gedongtengen', 'village' => 'Sosromenduran', 'postal_code' => '55271', 'latitude' => -7.7955798, 'longitude' => 110.3694896],
+            'Jakarta Barat' => ['province' => 'DKI Jakarta', 'district' => 'Grogol Petamburan', 'village' => 'Tomang', 'postal_code' => '11440', 'latitude' => -6.1683295, 'longitude' => 106.7588494],
+            'Bekasi' => ['province' => 'Jawa Barat', 'district' => 'Bekasi Timur', 'village' => 'Margahayu', 'postal_code' => '17113', 'latitude' => -6.2382699, 'longitude' => 106.9755726],
+            'Tangerang' => ['province' => 'Banten', 'district' => 'Tangerang', 'village' => 'Sukarasa', 'postal_code' => '15111', 'latitude' => -6.1783056, 'longitude' => 106.6318889],
+            'Depok' => ['province' => 'Jawa Barat', 'district' => 'Pancoran Mas', 'village' => 'Depok', 'postal_code' => '16431', 'latitude' => -6.4024844, 'longitude' => 106.7942405],
+            'Semarang' => ['province' => 'Jawa Tengah', 'district' => 'Semarang Tengah', 'village' => 'Sekayu', 'postal_code' => '50132', 'latitude' => -6.9903988, 'longitude' => 110.4229104],
+            'Medan' => ['province' => 'Sumatera Utara', 'district' => 'Medan Kota', 'village' => 'Pusat Pasar', 'postal_code' => '20212', 'latitude' => 3.5951956, 'longitude' => 98.6722227],
+            'Bali' => ['province' => 'Bali', 'district' => 'Denpasar Barat', 'village' => 'Pemecutan', 'postal_code' => '80119', 'latitude' => -8.6704582, 'longitude' => 115.2126293],
+            'Jakarta Selatan' => ['province' => 'DKI Jakarta', 'district' => 'Kebayoran Baru', 'village' => 'Selong', 'postal_code' => '12110', 'latitude' => -6.2614927, 'longitude' => 106.8105998],
+        ];
+
         // Demo seller acc owns Fashion Hub (v2)
         $demoSeller = User::create([
             'name'     => 'Demo Seller',
@@ -48,12 +63,21 @@ class VendorSeeder extends Seeder
                     'phone'    => '08000000' . substr($v['key'], 1),
                 ])->id;
 
+            $place = $cityDefaults[$v['city']];
             $created = Vendor::create([
                 'user_id'     => $userId,
                 'name'        => $v['name'],
                 'slug'        => Str::slug($v['name']),
                 'username'    => Str::slug($v['name']),
+                'country'     => 'Indonesia',
+                'province'    => $place['province'],
                 'city'        => $v['city'],
+                'district'    => $place['district'],
+                'village'     => $place['village'],
+                'postal_code' => $place['postal_code'],
+                'latitude'    => $place['latitude'],
+                'longitude'   => $place['longitude'],
+                'full_address'=> "Pusat operasional {$v['name']}, {$v['city']}",
                 'description' => $v['desc'],
                 'avatar'      => Helpers::avatar(mb_substr($v['name'], 0, 1), $v['color']),
                 'banner'      => Helpers::banner($v['em'], $v['color'], '#1f1f1f', $v['name'], substr($v['desc'], 0, 60)),

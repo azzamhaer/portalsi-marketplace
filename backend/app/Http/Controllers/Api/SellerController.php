@@ -14,6 +14,7 @@ use App\Services\RajaOngkirService;
 use App\Services\ProductStockNotificationService;
 use App\Support\ReservedUsernames;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -56,36 +57,42 @@ class SellerController extends Controller
         // Generate unique username dari nama toko
         $username = $this->generateUsername($data['name']);
 
-        $vendor = Vendor::create([
-            'user_id'     => $user->id,
-            'name'        => $data['name'],
-            'slug'        => Str::slug($data['name']) . '-' . Str::random(4),
-            'username'    => $username,
-            'country'     => $data['country'] ?? 'Indonesia',
-            'province'    => $data['province'],
-            'province_id' => $data['province_id'] ?? null,
-            'city'        => $data['city'],
-            'city_id'     => $data['city_id'] ?? null,
-            'district'    => $data['district'],
-            'district_id' => $data['district_id'] ?? null,
-            'village'     => $data['village'],
-            'village_id'  => $data['village_id'] ?? null,
-            'postal_code' => $data['postal_code'] ?? null,
-            'rajaongkir_destination_id' => $data['rajaongkir_destination_id'] ?? null,
-            'latitude'    => $data['latitude'] ?? null,
-            'longitude'   => $data['longitude'] ?? null,
-            'full_address'=> $data['full_address'] ?? null,
-            'address_note'=> $data['address_note'] ?? null,
-            'description' => $data['description'],
-            'avatar'      => $this->makeAvatar($data['name'][0] ?? 'S', $color),
-            'banner'      => $this->makeBanner($data['name'], $color),
-            'ktp_image'   => $data['ktp_image'],
-            'verification_status' => 'PENDING',
-            'bank_name'   => $data['bank_name'] ?? null,
-            'bank_account'=> $data['bank_account'] ?? null,
-            'bank_holder' => $data['bank_holder'] ?? null,
-        ]);
-        $user->update(['role' => 'SELLER']);
+        $vendor = DB::transaction(function () use ($user, $data, $username, $color) {
+            $vendor = Vendor::create([
+                'user_id'     => $user->id,
+                'name'        => $data['name'],
+                'slug'        => Str::slug($data['name']) . '-' . Str::random(4),
+                'username'    => $username,
+                'country'     => $data['country'] ?? 'Indonesia',
+                'province'    => $data['province'],
+                'province_id' => $data['province_id'] ?? null,
+                'city'        => $data['city'],
+                'city_id'     => $data['city_id'] ?? null,
+                'district'    => $data['district'],
+                'district_id' => $data['district_id'] ?? null,
+                'village'     => $data['village'],
+                'village_id'  => $data['village_id'] ?? null,
+                'postal_code' => $data['postal_code'] ?? null,
+                'rajaongkir_destination_id' => $data['rajaongkir_destination_id'] ?? null,
+                'latitude'    => $data['latitude'],
+                'longitude'   => $data['longitude'],
+                'full_address'=> $data['full_address'],
+                'address_note'=> $data['address_note'] ?? null,
+                'description' => $data['description'],
+                'avatar'      => $this->makeAvatar($data['name'][0] ?? 'S', $color),
+                'banner'      => $this->makeBanner($data['name'], $color),
+                'ktp_image'   => $data['ktp_image'],
+                'verification_status' => 'PENDING',
+                'bank_name'   => $data['bank_name'] ?? null,
+                'bank_account'=> $data['bank_account'] ?? null,
+                'bank_holder' => $data['bank_holder'] ?? null,
+            ]);
+
+            $user->update(['role' => 'SELLER']);
+            $this->syncVendorAddress($vendor);
+
+            return $vendor;
+        });
 
         // Notifikasi ke SEMUA admin agar review pendaftaran ini
         $admins = \App\Models\User::where('role', 'ADMIN')->pluck('id');
@@ -139,6 +146,7 @@ class SellerController extends Controller
     public function updateProfile(Request $request)
     {
         $vendor = $this->requireApprovedVendor($request);
+        $updatesAddress = $this->requestTouchesVendorAddress($request);
         $data = $request->validate([
             'name'         => 'sometimes|string|max:255',
             'country'      => 'nullable|string|max:80',
@@ -153,8 +161,8 @@ class SellerController extends Controller
             'postal_code'  => 'nullable|string|max:10',
             'rajaongkir_destination_id' => 'nullable|integer',
             'description'  => 'sometimes|string',
-            'latitude'     => 'required|numeric',
-            'longitude'    => 'required|numeric',
+            'latitude'     => ($updatesAddress ? 'required' : 'sometimes|nullable') . '|numeric',
+            'longitude'    => ($updatesAddress ? 'required' : 'sometimes|nullable') . '|numeric',
             'full_address' => 'nullable|string',
             'address_note' => 'nullable|string|max:1000',
             'avatar'       => 'nullable|string',
@@ -171,7 +179,67 @@ class SellerController extends Controller
         }
 
         $vendor->update($data);
+        if ($updatesAddress) {
+            $this->syncVendorAddress($vendor->fresh());
+        }
+
         return response()->json($vendor);
+    }
+
+    private function requestTouchesVendorAddress(Request $request): bool
+    {
+        $fields = [
+            'country', 'province', 'province_id', 'city', 'city_id',
+            'district', 'district_id', 'village', 'village_id',
+            'postal_code', 'rajaongkir_destination_id',
+            'latitude', 'longitude', 'full_address', 'address_note',
+        ];
+
+        foreach ($fields as $field) {
+            if ($request->has($field)) return true;
+        }
+
+        return false;
+    }
+
+    private function syncVendorAddress(Vendor $vendor): void
+    {
+        $vendor->loadMissing('user');
+        $user = $vendor->user;
+        if (!$user || $vendor->latitude === null || $vendor->longitude === null || !$vendor->full_address) return;
+
+        $payload = [
+            'recipient' => $user->name ?: $vendor->name,
+            'phone' => $user->phone ?: '-',
+            'country' => $vendor->country ?: 'Indonesia',
+            'province' => $vendor->province,
+            'province_id' => $vendor->province_id,
+            'city' => $vendor->city,
+            'city_id' => $vendor->city_id,
+            'district' => $vendor->district,
+            'district_id' => $vendor->district_id,
+            'village' => $vendor->village,
+            'village_id' => $vendor->village_id,
+            'postal_code' => $vendor->postal_code,
+            'rajaongkir_destination_id' => $vendor->rajaongkir_destination_id,
+            'latitude' => $vendor->latitude,
+            'longitude' => $vendor->longitude,
+            'full_address' => $vendor->full_address,
+            'address_note' => $vendor->address_note,
+        ];
+
+        $existing = $user->addresses()
+            ->where('full_address', $vendor->full_address)
+            ->where('city', $vendor->city)
+            ->first();
+
+        if ($existing) {
+            $existing->update($payload);
+            return;
+        }
+
+        $payload['is_default'] = !$user->addresses()->exists();
+        $user->addresses()->create($payload);
     }
 
     public function products(Request $request)
